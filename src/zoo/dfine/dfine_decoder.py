@@ -517,6 +517,8 @@ class DFINETransformer(nn.Module):
 
         self._reset_parameters(feat_channels)
 
+        self.training = False   # my modificaton
+
     def convert_to_deploy(self):
         self.dec_score_head = nn.ModuleList([nn.Identity()] * (self.eval_idx) + [self.dec_score_head[self.eval_idx]])
         self.dec_bbox_head = nn.ModuleList(
@@ -589,6 +591,7 @@ class DFINETransformer(nn.Module):
         feat_flatten = []
         spatial_shapes = []
         for i, feat in enumerate(proj_feats):
+            feat = feat.unsqueeze(0)
             _, _, h, w = feat.shape
             # [b, c, h, w] -> [b, h*w, c]
             feat_flatten.append(feat.flatten(2).permute(0, 2, 1))
