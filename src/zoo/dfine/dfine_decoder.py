@@ -369,7 +369,7 @@ class TransformerDecoder(nn.Module):
 
             if i == 0 :
                 # Initial bounding box predictions with inverse sigmoid refinement
-                pre_bboxes = F.sigmoid(pre_bbox_head(output) + inverse_sigmoid(ref_points_detach))
+                pre_bboxes = F.sigmoid(pre_bbox_head(output) + inverse_sigmoid(ref_points_detach))  # error
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
 
@@ -405,7 +405,12 @@ class DFINETransformer(nn.Module):
                  num_classes=80,
                  hidden_dim=256,
                  num_queries=300,
-                 feat_channels=[512, 1024, 2048],
+                 feat_channels=[512, 1024, 2048],   # is this the feat channels of the input feat maps? no!
+                 
+                # feats[0] shape torch.Size([1, 256, 80, 80])
+                # feats[1] shape torch.Size([1, 256, 40, 40])
+                # feats[2] shape torch.Size([1, 256, 20, 20])
+
                  feat_strides=[8, 16, 32],
                  num_levels=3,
                  num_points=4,
@@ -433,17 +438,23 @@ class DFINETransformer(nn.Module):
 
         for _ in range(num_levels - len(feat_strides)):
             feat_strides.append(feat_strides[-1] * 2)
+        
+        # my modification
+        hidden_dim = 512    
+        # eval_spatial_size = 640
 
         self.hidden_dim = hidden_dim
         scaled_dim = round(layer_scale*hidden_dim)
         self.nhead = nhead
         self.feat_strides = feat_strides
+        self.feat_strides = [20, 40, 80] # my modification
         self.num_levels = num_levels
         self.num_classes = num_classes
         self.num_queries = num_queries
         self.eps = eps
         self.num_layers = num_layers
         self.eval_spatial_size = eval_spatial_size
+        print('eval spatia size', self.eval_spatial_size)
         self.aux_loss = aux_loss
         self.reg_max = reg_max
 
@@ -451,6 +462,8 @@ class DFINETransformer(nn.Module):
         assert cross_attn_method in ('default', 'discrete'), ''
         self.cross_attn_method = cross_attn_method
         self.query_select_method = query_select_method
+
+        feat_channels = [256, 512, 512]   # my modification
 
         # backbone feature projection
         self._build_input_proj_layer(feat_channels)
@@ -512,7 +525,7 @@ class DFINETransformer(nn.Module):
             self.register_buffer('valid_mask', valid_mask)
         # init encoder output anchors and valid_mask
         if self.eval_spatial_size:
-            self.anchors, self.valid_mask = self._generate_anchors()
+            self.anchors, self.valid_mask = self._generate_anchors()    # spatial space not passed!
 
 
         self._reset_parameters(feat_channels)
@@ -549,7 +562,7 @@ class DFINETransformer(nn.Module):
             if in_channels != self.hidden_dim:
                 init.xavier_uniform_(m[0].weight)
 
-    def _build_input_proj_layer(self, feat_channels):
+    def _build_input_proj_layer(self, feat_channels):   # currently feat_channels is [256, 512, 512]
         self.input_proj = nn.ModuleList()
         for in_channels in feat_channels:
             if in_channels == self.hidden_dim:
@@ -577,7 +590,7 @@ class DFINETransformer(nn.Module):
                 in_channels = self.hidden_dim
 
     def _get_encoder_input(self, feats: List[torch.Tensor]):
-        # get projection features
+        # get projection features.
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
         if self.num_levels > len(proj_feats):
             len_srcs = len(proj_feats)
@@ -591,7 +604,10 @@ class DFINETransformer(nn.Module):
         feat_flatten = []
         spatial_shapes = []
         for i, feat in enumerate(proj_feats):
-            feat = feat.unsqueeze(0)
+            print('shape of each PROJECTED feat', feat.shape)
+            # shape of each projected feat torch.Size([1, 256, 32, 32]), should be 80!
+            # shape of each projected feat torch.Size([1, 256, 16, 16]), should be 40!
+            # shape of each projected feat torch.Size([1, 256, 8, 8]), should be 20!
             _, _, h, w = feat.shape
             # [b, c, h, w] -> [b, h*w, c]
             feat_flatten.append(feat.flatten(2).permute(0, 2, 1))
@@ -599,7 +615,7 @@ class DFINETransformer(nn.Module):
             spatial_shapes.append([h, w])
 
         # [b, l, c]
-        feat_flatten = torch.concat(feat_flatten, 1)
+        feat_flatten = torch.concat(feat_flatten, 1)    # error
         return feat_flatten, spatial_shapes
 
     def _generate_anchors(self,
@@ -607,12 +623,17 @@ class DFINETransformer(nn.Module):
                           grid_size=0.05,
                           dtype=torch.float32,
                           device='cpu'):
-        if spatial_shapes is None:
+        print('spatial space passed to generate anchors', spatial_shapes)
+        if spatial_shapes is None:  # here
             spatial_shapes = []
-            eval_h, eval_w = self.eval_spatial_size
-            for s in self.feat_strides:
-                spatial_shapes.append([int(eval_h / s), int(eval_w / s)])
+            eval_h, eval_w = self.eval_spatial_size # 640, 640
+            print('self.feat_strides', self.feat_strides)
+            for s in self.feat_strides: # [8, 16, 32], should be [20, 40, 80]
 
+                spatial_shapes.append([int(eval_h / s), int(eval_w / s)])
+            print('spatial shapes from the original eval_spatial_size', spatial_shapes) # [[80, 80], [40, 40], [20, 20]]
+            # should be [[32, 32], [16, 16], [8, 8]]
+        
         anchors = []
         for lvl, (h, w) in enumerate(spatial_shapes):
             grid_y, grid_x = torch.meshgrid(torch.arange(h), torch.arange(w), indexing='ij')
@@ -644,10 +665,18 @@ class DFINETransformer(nn.Module):
             valid_mask = self.valid_mask
         if memory.shape[0] > 1:
             anchors = anchors.repeat(memory.shape[0], 1, 1)
-
+        
         # memory = torch.where(valid_mask, memory, 0)
         # TODO fix type error for onnx export
-        memory = valid_mask.to(memory.dtype) * memory
+        print('memory shape', memory.shape)
+        print('valid mask shape', valid_mask.shape)
+        # in dfine
+        # memory shape torch.Size([1, 8400, 256])
+        # valid mask shape torch.Size([1, 8400, 1])
+        # now
+        # memory shape torch.Size([1, 1344, 512]), correct
+        # valid mask shape torch.Size([1, 8400, 1])
+        memory = valid_mask.to(memory.dtype) * memory   # tensor size mismatch, but what is this line for?
 
         output_memory :torch.Tensor = self.enc_output(memory)
         enc_outputs_logits :torch.Tensor = self.enc_score_head(output_memory)
@@ -704,9 +733,16 @@ class DFINETransformer(nn.Module):
         return topk_memory, topk_logits, topk_anchors
 
     def forward(self, feats, targets=None):
+        # shape of each feat torch.Size([1, 256, 80, 80])
+        # shape of each feat torch.Size([1, 256, 40, 40])
+        # shape of each feat torch.Size([1, 256, 20, 20])
+        # print('shape of INPUT feat 0', feats[0].shape)
+        # print('shape of INPUT feat 1', feats[1].shape)
+        # print('shape of INPUT feat 2', feats[2].shape)
+
         # input projection and embedding
         memory, spatial_shapes = self._get_encoder_input(feats)
-
+        # print('spatial shapes', spatial_shapes) # [[32, 32], [16, 16], [8, 8]]
         # prepare denoising training
         if self.training and self.num_denoising > 0:
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = \
@@ -722,10 +758,10 @@ class DFINETransformer(nn.Module):
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
         init_ref_contents, init_ref_points_unact, enc_topk_bboxes_list, enc_topk_logits_list = \
-            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact)
+            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
 
-        # decoder
-        out_bboxes, out_logits, out_corners, out_refs, pre_bboxes, pre_logits = self.decoder(
+        # decoder: FDR
+        out_bboxes, out_logits, out_corners, out_refs, pre_bboxes, pre_logits = self.decoder(   # error
             init_ref_contents,
             init_ref_points_unact,
             memory,
