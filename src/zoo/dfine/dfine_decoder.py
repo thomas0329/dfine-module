@@ -296,6 +296,7 @@ class TransformerDecoder(nn.Module):
 
     def __init__(self, hidden_dim, decoder_layer, decoder_layer_wide, num_layers, num_head, reg_max, reg_scale, up,
                  eval_idx=-1, layer_scale=2):
+        print('decoder layer in constructor', decoder_layer)    # TransformerDecoderLayer
         super(TransformerDecoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -325,7 +326,7 @@ class TransformerDecoder(nn.Module):
         self.lqe_layers = nn.ModuleList([nn.Identity()] * (self.eval_idx) + [self.lqe_layers[self.eval_idx]])
 
     def forward(self,
-                target,
+                target, # init_ref_contents
                 ref_points_unact,
                 memory,
                 spatial_shapes,
@@ -367,14 +368,21 @@ class TransformerDecoder(nn.Module):
 
             output = layer(output, ref_points_input, value, spatial_shapes, attn_mask, query_pos_embed)
 
-            if i == 0 :
+            if i == 0 : # the output of the first layer is fed to pre_bbox_head.
                 # Initial bounding box predictions with inverse sigmoid refinement
-                pre_bboxes = F.sigmoid(pre_bbox_head(output) + inverse_sigmoid(ref_points_detach))  # error
+                # input and output shape of layer 1 are the same
+
+                # change MLP to dualddetect?
+                print('TYPE 1', type(pre_bbox_head(output)[1]))    # <class 'list'>, should be tensor
+                print('pre_bbox_head(output)[1]', pre_bbox_head(output)[1])
+                pre_bboxes = F.sigmoid(pre_bbox_head(output)[1] + inverse_sigmoid(ref_points_detach))  # choose d2
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
 
             # Refine bounding box corners using FDR, integrating previous layer's corrections
             pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
+
+            # seems to refine prediction from the first layer in each iteration
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
 
             if self.training or i == self.eval_idx:
@@ -604,7 +612,6 @@ class DFINETransformer(nn.Module):
         feat_flatten = []
         spatial_shapes = []
         for i, feat in enumerate(proj_feats):
-            print('shape of each PROJECTED feat', feat.shape)
             # shape of each projected feat torch.Size([1, 256, 32, 32]), should be 80!
             # shape of each projected feat torch.Size([1, 256, 16, 16]), should be 40!
             # shape of each projected feat torch.Size([1, 256, 8, 8]), should be 20!
@@ -668,8 +675,8 @@ class DFINETransformer(nn.Module):
         
         # memory = torch.where(valid_mask, memory, 0)
         # TODO fix type error for onnx export
-        print('memory shape', memory.shape)
-        print('valid mask shape', valid_mask.shape)
+        # print('memory shape', memory.shape)
+        # print('valid mask shape', valid_mask.shape)
         # in dfine
         # memory shape torch.Size([1, 8400, 256])
         # valid mask shape torch.Size([1, 8400, 1])
@@ -758,7 +765,9 @@ class DFINETransformer(nn.Module):
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
         init_ref_contents, init_ref_points_unact, enc_topk_bboxes_list, enc_topk_logits_list = \
-            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
+            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact)
+
+        print('input to layer 1 of decoder', init_ref_contents.shape)
 
         # decoder: FDR
         out_bboxes, out_logits, out_corners, out_refs, pre_bboxes, pre_logits = self.decoder(   # error
