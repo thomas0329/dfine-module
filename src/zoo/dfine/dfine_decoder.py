@@ -296,7 +296,7 @@ class TransformerDecoder(nn.Module):
 
     def __init__(self, hidden_dim, decoder_layer, decoder_layer_wide, num_layers, num_head, reg_max, reg_scale, up,
                  eval_idx=-1, layer_scale=2):
-        print('decoder layer in constructor', decoder_layer)    # TransformerDecoderLayer
+        # print('decoder layer in constructor', decoder_layer)    # TransformerDecoderLayer
         super(TransformerDecoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -372,8 +372,8 @@ class TransformerDecoder(nn.Module):
                 # Initial bounding box predictions with inverse sigmoid refinement
                 # returns [d1, d2] during training
                 # pre_bbox_head(output) should be sth like ([1, 300, 4])
-                print('pre_bbox_head(output)', pre_bbox_head(output).shape)
-                print('inverse_sigmoid(ref_points_detach)', inverse_sigmoid(ref_points_detach).shape)
+                # print('pre_bbox_head(output)', pre_bbox_head(output).shape)
+                # print('inverse_sigmoid(ref_points_detach)', inverse_sigmoid(ref_points_detach).shape)
                 pre_bboxes = F.sigmoid(pre_bbox_head(output) + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
@@ -519,7 +519,7 @@ class DFINETransformer(nn.Module):
         self.dec_score_head = nn.ModuleList(
             [nn.Linear(hidden_dim, num_classes) for _ in range(self.eval_idx + 1)]
           + [nn.Linear(scaled_dim, num_classes) for _ in range(num_layers - self.eval_idx - 1)])
-        self.pre_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3)
+        self.pre_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3)  # does not output class info?
         self.dec_bbox_head = nn.ModuleList(
             [MLP(hidden_dim, hidden_dim, 4 * (self.reg_max+1), 3) for _ in range(self.eval_idx + 1)]
           + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max+1), 3) for _ in range(num_layers - self.eval_idx - 1)])
@@ -629,15 +629,15 @@ class DFINETransformer(nn.Module):
                           grid_size=0.05,
                           dtype=torch.float32,
                           device='cpu'):
-        print('spatial space passed to generate anchors', spatial_shapes)
+        # print('spatial space passed to generate anchors', spatial_shapes)
         if spatial_shapes is None:  # here
             spatial_shapes = []
             eval_h, eval_w = self.eval_spatial_size # 640, 640
-            print('self.feat_strides', self.feat_strides)
+            # print('self.feat_strides', self.feat_strides)
             for s in self.feat_strides: # [8, 16, 32], should be [20, 40, 80]
 
                 spatial_shapes.append([int(eval_h / s), int(eval_w / s)])
-            print('spatial shapes from the original eval_spatial_size', spatial_shapes) # [[80, 80], [40, 40], [20, 20]]
+            # print('spatial shapes from the original eval_spatial_size', spatial_shapes) # [[80, 80], [40, 40], [20, 20]]
             # should be [[32, 32], [16, 16], [8, 8]]
         
         anchors = []
@@ -812,8 +812,18 @@ class DFINETransformer(nn.Module):
                                                         dn_out_corners[-1], dn_out_logits[-1])
                 out['dn_pre_outputs'] = {'pred_logits': dn_pre_logits, 'pred_boxes': dn_pre_bboxes}
                 out['dn_meta'] = dn_meta
+        print('dfine out')  # ['pred_logits', 'pred_boxes']
+        # [1, 300, 80], should be:
 
-        return out
+        # d1
+        # torch.Size([16, 144, 80, 80])
+        # torch.Size([16, 144, 40, 40])
+        # torch.Size([16, 144, 20, 20])
+        # d2: same
+
+        # targets: # [3xx, 6]
+
+        return out  # find "feat map" in out
 
 
     @torch.jit.unused
