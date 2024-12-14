@@ -370,12 +370,11 @@ class TransformerDecoder(nn.Module):
 
             if i == 0 : # the output of the first layer is fed to pre_bbox_head.
                 # Initial bounding box predictions with inverse sigmoid refinement
-                # input and output shape of layer 1 are the same
-
-                # change MLP to dualddetect?
-                print('TYPE 1', type(pre_bbox_head(output)[1]))    # <class 'list'>, should be tensor
-                print('pre_bbox_head(output)[1]', pre_bbox_head(output)[1])
-                pre_bboxes = F.sigmoid(pre_bbox_head(output)[1] + inverse_sigmoid(ref_points_detach))  # choose d2
+                # returns [d1, d2] during training
+                # pre_bbox_head(output) should be sth like ([1, 300, 4])
+                print('pre_bbox_head(output)', pre_bbox_head(output).shape)
+                print('inverse_sigmoid(ref_points_detach)', inverse_sigmoid(ref_points_detach).shape)
+                pre_bboxes = F.sigmoid(pre_bbox_head(output) + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
 
@@ -449,7 +448,7 @@ class DFINETransformer(nn.Module):
         
         # my modification
         hidden_dim = 512    
-        # eval_spatial_size = 640
+        self.i = 38 # where dualddetect should be
 
         self.hidden_dim = hidden_dim
         scaled_dim = round(layer_scale*hidden_dim)
@@ -765,9 +764,9 @@ class DFINETransformer(nn.Module):
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
         init_ref_contents, init_ref_points_unact, enc_topk_bboxes_list, enc_topk_logits_list = \
-            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact)
-
-        print('input to layer 1 of decoder', init_ref_contents.shape)
+            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
+        
+        print('init_ref_points_unact', init_ref_points_unact.shape) # [1, 300, 4], yolo wants [1, 300, 144]
 
         # decoder: FDR
         out_bboxes, out_logits, out_corners, out_refs, pre_bboxes, pre_logits = self.decoder(   # error
