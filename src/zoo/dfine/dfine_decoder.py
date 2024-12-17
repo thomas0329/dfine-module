@@ -339,7 +339,8 @@ class TransformerDecoder(nn.Module):
                 reg_scale,
                 attn_mask=None,
                 memory_mask=None,
-                dn_meta=None):
+                dn_meta=None,
+                aux=None):
         output = target
         output_detach = pred_corners_undetach = 0
         value = self.value_op(memory, None, None, memory_mask, spatial_shapes)
@@ -372,9 +373,9 @@ class TransformerDecoder(nn.Module):
                 # Initial bounding box predictions with inverse sigmoid refinement
                 # returns [d1, d2] during training
                 # pre_bbox_head(output) should be sth like ([1, 300, 4])
-                # print('pre_bbox_head(output)', pre_bbox_head(output).shape)
-                # print('inverse_sigmoid(ref_points_detach)', inverse_sigmoid(ref_points_detach).shape)
-                pre_bboxes = F.sigmoid(pre_bbox_head(output) + inverse_sigmoid(ref_points_detach))
+                # input to dualddetect torch.Size([1, 300, 512])
+                # pre_bbox_head(output) torch.Size([1, 300, 4])
+                pre_bboxes = F.sigmoid(pre_bbox_head(output, aux) + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
 
@@ -800,7 +801,8 @@ class DFINETransformer(nn.Module):
             self.up,
             self.reg_scale,
             attn_mask=attn_mask,
-            dn_meta=dn_meta)
+            dn_meta=dn_meta, 
+            aux=True)
         
         main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits = self.decoder(   # error
             main_init_ref_contents,
@@ -815,7 +817,8 @@ class DFINETransformer(nn.Module):
             self.up,
             self.reg_scale,
             attn_mask=attn_mask,
-            dn_meta=dn_meta)
+            dn_meta=dn_meta,
+            aux=False)
 
         if self.training and dn_meta is not None:
             dn_pre_logits, main_pre_logits = torch.split(main_pre_logits, dn_meta['dn_num_split'], dim=1)
