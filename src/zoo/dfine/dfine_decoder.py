@@ -412,8 +412,8 @@ class DFINETransformer(nn.Module):
                  num_classes=80,
                  hidden_dim=256,
                  num_queries=300,
-                 feat_channels=[512, 1024, 2048],   # is this the feat channels of the input feat maps? no!
-                 
+                 feat_channels=[512, 512, 512],   # is this the feat channels of the input feat maps? no!
+                 feat_channels2=[256, 512, 512],
                 # feats[0] shape torch.Size([1, 256, 80, 80])
                 # feats[1] shape torch.Size([1, 256, 40, 40])
                 # feats[2] shape torch.Size([1, 256, 20, 20])
@@ -470,11 +470,10 @@ class DFINETransformer(nn.Module):
         self.cross_attn_method = cross_attn_method
         self.query_select_method = query_select_method
 
-        feat_channels = [256, 512, 512]   # my modification
-
         # backbone feature projection
         self._build_input_proj_layer(feat_channels)
-
+        self._build_input_proj_layer(feat_channels2)
+        
         # Transformer module
         self.up = nn.Parameter(torch.tensor([0.5]), requires_grad=False)
         self.reg_scale = nn.Parameter(torch.tensor([reg_scale]), requires_grad=False)
@@ -565,17 +564,24 @@ class DFINETransformer(nn.Module):
             init.xavier_uniform_(self.tgt_embed.weight)
         init.xavier_uniform_(self.query_pos_head.layers[0].weight)
         init.xavier_uniform_(self.query_pos_head.layers[1].weight)
+
+        # reset both?
         for m, in_channels in zip(self.input_proj, feat_channels):
             if in_channels != self.hidden_dim:
                 init.xavier_uniform_(m[0].weight)
 
-    def _build_input_proj_layer(self, feat_channels):   # currently feat_channels is [256, 512, 512]
-        self.input_proj = nn.ModuleList()
+        for m, in_channels in zip(self.input_proj2, feat_channels):
+            if in_channels != self.hidden_dim:
+                init.xavier_uniform_(m[0].weight)
+
+    def _build_input_proj_layer(self, feat_channels):   # 512, 512, 512 or 256, 512, 512
+        
+        input_proj = nn.ModuleList()
         for in_channels in feat_channels:
             if in_channels == self.hidden_dim:
-                self.input_proj.append(nn.Identity())
+                input_proj.append(nn.Identity())
             else:
-                self.input_proj.append(
+                input_proj.append(
                     nn.Sequential(OrderedDict([
                         ('conv', nn.Conv2d(in_channels, self.hidden_dim, 1, bias=False)),
                         ('norm', nn.BatchNorm2d(self.hidden_dim,))])
@@ -586,9 +592,9 @@ class DFINETransformer(nn.Module):
 
         for _ in range(self.num_levels - len(feat_channels)):
             if in_channels == self.hidden_dim:
-                self.input_proj.append(nn.Identity())
+                input_proj.append(nn.Identity())
             else:
-                self.input_proj.append(
+                input_proj.append(
                     nn.Sequential(OrderedDict([
                         ('conv', nn.Conv2d(in_channels, self.hidden_dim, 3, 2, padding=1, bias=False)),
                         ('norm', nn.BatchNorm2d(self.hidden_dim))])
@@ -596,16 +602,28 @@ class DFINETransformer(nn.Module):
                 )
                 in_channels = self.hidden_dim
 
-    def _get_encoder_input(self, feats: List[torch.Tensor]):
+        if feat_channels[0] == 512:
+            name = 'input_proj'
+        else: 
+            name = 'input_proj2'
+        setattr(self, name, input_proj)
+        print(f"Constructed {name}")
+
+    def _get_encoder_input(self, feats: List[torch.Tensor], aux):
         # get projection features.
-        proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
+        if aux:
+            input_proj = self.input_proj
+        else: 
+            input_proj = self.input_proj2
+
+        proj_feats = [input_proj[i](feat) for i, feat in enumerate(feats)]
         if self.num_levels > len(proj_feats):
             len_srcs = len(proj_feats)
             for i in range(len_srcs, self.num_levels):
                 if i == len_srcs:
-                    proj_feats.append(self.input_proj[i](feats[-1]))
+                    proj_feats.append(input_proj[i](feats[-1]))
                 else:
-                    proj_feats.append(self.input_proj[i](proj_feats[-1]))
+                    proj_feats.append(input_proj[i](proj_feats[-1]))
 
         # get encoder inputs
         feat_flatten = []
@@ -739,15 +757,14 @@ class DFINETransformer(nn.Module):
         return topk_memory, topk_logits, topk_anchors
 
     def forward(self, feats, targets=None):
-        # shape of each feat torch.Size([1, 256, 80, 80])
-        # shape of each feat torch.Size([1, 256, 40, 40])
-        # shape of each feat torch.Size([1, 256, 20, 20])
-        # print('shape of INPUT feat 0', feats[0].shape)
-        # print('shape of INPUT feat 1', feats[1].shape)
-        # print('shape of INPUT feat 2', feats[2].shape)
 
+        # feats len 6
+        # input channels [512, 512, 512, 256, 512, 512]
+        aux_feats = feats[:3]
+        main_feats = feats[3:]
         # input projection and embedding
-        memory, spatial_shapes = self._get_encoder_input(feats)
+        aux_memory, spatial_shapes = self._get_encoder_input(aux_feats, aux=True)
+        main_memory, _ = self._get_encoder_input(main_feats ,aux=False)
         # print('spatial shapes', spatial_shapes) # [[32, 32], [16, 16], [8, 8]]
         # prepare denoising training
         if self.training and self.num_denoising > 0:
@@ -763,16 +780,32 @@ class DFINETransformer(nn.Module):
         else:
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
-        init_ref_contents, init_ref_points_unact, enc_topk_bboxes_list, enc_topk_logits_list = \
-            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
+        aux_init_ref_contents, aux_init_ref_points_unact, aux_enc_topk_bboxes_list, aux_enc_topk_logits_list = \
+            self._get_decoder_input(aux_memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
         
-        print('init_ref_points_unact', init_ref_points_unact.shape) # [1, 300, 4], yolo wants [1, 300, 144]
+        main_init_ref_contents, main_init_ref_points_unact, main_enc_topk_bboxes_list, main_enc_topk_logits_list = \
+            self._get_decoder_input(main_memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
 
         # decoder: FDR
-        out_bboxes, out_logits, out_corners, out_refs, pre_bboxes, pre_logits = self.decoder(   # error
-            init_ref_contents,
-            init_ref_points_unact,
-            memory,
+        aux_out_bboxes, aux_out_logits, aux_out_corners, aux_out_refs, aux_pre_bboxes, aux_pre_logits = self.decoder(   # error
+            aux_init_ref_contents,
+            aux_init_ref_points_unact,
+            aux_memory,
+            spatial_shapes,
+            self.dec_bbox_head,
+            self.dec_score_head,
+            self.query_pos_head,
+            self.pre_bbox_head,
+            self.integral,
+            self.up,
+            self.reg_scale,
+            attn_mask=attn_mask,
+            dn_meta=dn_meta)
+        
+        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits = self.decoder(   # error
+            main_init_ref_contents,
+            main_init_ref_points_unact,
+            main_memory,
             spatial_shapes,
             self.dec_bbox_head,
             self.dec_score_head,
@@ -785,26 +818,26 @@ class DFINETransformer(nn.Module):
             dn_meta=dn_meta)
 
         if self.training and dn_meta is not None:
-            dn_pre_logits, pre_logits = torch.split(pre_logits, dn_meta['dn_num_split'], dim=1)
-            dn_pre_bboxes, pre_bboxes = torch.split(pre_bboxes, dn_meta['dn_num_split'], dim=1)
-            dn_out_bboxes, out_bboxes = torch.split(out_bboxes, dn_meta['dn_num_split'], dim=2)
-            dn_out_logits, out_logits = torch.split(out_logits, dn_meta['dn_num_split'], dim=2)
+            dn_pre_logits, main_pre_logits = torch.split(main_pre_logits, dn_meta['dn_num_split'], dim=1)
+            dn_pre_bboxes, main_pre_bboxes = torch.split(main_pre_bboxes, dn_meta['dn_num_split'], dim=1)
+            dn_out_bboxes, main_out_bboxes = torch.split(main_out_bboxes, dn_meta['dn_num_split'], dim=2)
+            dn_out_logits, main_out_logits = torch.split(main_out_logits, dn_meta['dn_num_split'], dim=2)
 
-            dn_out_corners, out_corners = torch.split(out_corners, dn_meta['dn_num_split'], dim=2)
-            dn_out_refs, out_refs = torch.split(out_refs, dn_meta['dn_num_split'], dim=2)
+            dn_out_corners, out_corners = torch.split(main_out_corners, dn_meta['dn_num_split'], dim=2)
+            dn_out_refs, out_refs = torch.split(main_out_refs, dn_meta['dn_num_split'], dim=2)
 
 
         if self.training:
-            out = {'pred_logits': out_logits[-1], 'pred_boxes': out_bboxes[-1], 'pred_corners': out_corners[-1],
+            out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1], 'pred_corners': out_corners[-1],
                    'ref_points': out_refs[-1], 'up': self.up, 'reg_scale': self.reg_scale}
         else:
-            out = {'pred_logits': out_logits[-1], 'pred_boxes': out_bboxes[-1]}
+            out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1]}
 
         if self.training and self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss2(out_logits[:-1], out_bboxes[:-1], out_corners[:-1], out_refs[:-1],
-                                                     out_corners[-1], out_logits[-1])
-            out['enc_aux_outputs'] = self._set_aux_loss(enc_topk_logits_list, enc_topk_bboxes_list)
-            out['pre_outputs'] = {'pred_logits': pre_logits, 'pred_boxes': pre_bboxes}
+            out['aux_outputs'] = self._set_aux_loss2(main_out_logits[:-1], main_out_bboxes[:-1], out_corners[:-1], out_refs[:-1],
+                                                     out_corners[-1], main_out_logits[-1])
+            out['enc_aux_outputs'] = self._set_aux_loss(main_enc_topk_logits_list, main_enc_topk_bboxes_list)
+            out['pre_outputs'] = {'pred_logits': main_pre_logits, 'pred_boxes': main_pre_bboxes}
             out['enc_meta'] = {'class_agnostic': self.query_select_method == 'agnostic'}
 
             if dn_meta is not None:
@@ -812,9 +845,7 @@ class DFINETransformer(nn.Module):
                                                         dn_out_corners[-1], dn_out_logits[-1])
                 out['dn_pre_outputs'] = {'pred_logits': dn_pre_logits, 'pred_boxes': dn_pre_bboxes}
                 out['dn_meta'] = dn_meta
-        print('dfine out')  # ['pred_logits', 'pred_boxes']
-        # [1, 300, 80], should be:
-
+        print('dfine out')
         # d1
         # torch.Size([16, 144, 80, 80])
         # torch.Size([16, 144, 40, 40])
