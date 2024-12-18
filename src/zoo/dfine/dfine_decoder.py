@@ -375,7 +375,8 @@ class TransformerDecoder(nn.Module):
                 # pre_bbox_head(output) should be sth like ([1, 300, 4])
                 # input to dualddetect torch.Size([1, 300, 512])
                 # pre_bbox_head(output) torch.Size([1, 300, 4])
-                pre_bboxes = F.sigmoid(pre_bbox_head(output, aux) + inverse_sigmoid(ref_points_detach))
+                dbox, d_dualddetect = pre_bbox_head(output, aux)
+                pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
 
@@ -402,7 +403,7 @@ class TransformerDecoder(nn.Module):
             output_detach = output.detach()
 
         return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores
+               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_dualddetect
 
 
 @register()
@@ -788,7 +789,7 @@ class DFINETransformer(nn.Module):
             self._get_decoder_input(main_memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
 
         # decoder: FDR
-        aux_out_bboxes, aux_out_logits, aux_out_corners, aux_out_refs, aux_pre_bboxes, aux_pre_logits = self.decoder(   # error
+        aux_out_bboxes, aux_out_logits, aux_out_corners, aux_out_refs, aux_pre_bboxes, aux_pre_logits, aux_d_dualddetect = self.decoder(   # error
             aux_init_ref_contents,
             aux_init_ref_points_unact,
             aux_memory,
@@ -804,7 +805,7 @@ class DFINETransformer(nn.Module):
             dn_meta=dn_meta, 
             aux=True)
         
-        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits = self.decoder(   # error
+        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, main_d_dualddetect = self.decoder(   # error
             main_init_ref_contents,
             main_init_ref_points_unact,
             main_memory,
@@ -856,8 +857,9 @@ class DFINETransformer(nn.Module):
         # d2: same
 
         # targets: # [3xx, 6]
+        dual_out = aux_d_dualddetect, main_d_dualddetect
 
-        return out  # find "feat map" in out
+        return out, dual_out
 
 
     @torch.jit.unused
