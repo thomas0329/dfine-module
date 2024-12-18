@@ -466,6 +466,7 @@ class DFINETransformer(nn.Module):
         print('eval spatia size', self.eval_spatial_size)
         self.aux_loss = aux_loss
         self.reg_max = reg_max
+        self.no = num_classes + self.reg_max * 4
 
         assert query_select_method in ('default', 'one2many', 'agnostic'), ''
         assert cross_attn_method in ('default', 'discrete'), ''
