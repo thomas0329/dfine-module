@@ -39,7 +39,7 @@ def main(args, ) -> None:
         if k not in ['update', ] and v is not None})
 
     cfg = YAMLConfig(args.config, **update_dict)
-
+    
     if args.resume or args.tuning:
         if 'HGNetv2' in cfg.yaml_cfg:
             cfg.yaml_cfg['HGNetv2']['pretrained'] = False
@@ -55,6 +55,10 @@ def main(args, ) -> None:
 
     dist_utils.cleanup()
 
+    # in yolo, why do we need targets in forward?
+    # get_contrastive in dfinetransformer
+    # in dfine, what are the targets passed to get_contrastive?
+    # targets are from dfine loader, and are preroccessed 
 
 if __name__ == '__main__':
 

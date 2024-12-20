@@ -233,6 +233,7 @@ class DFINECriterion(nn.Module):
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
         outputs_without_aux = {k: v for k, v in outputs.items() if 'aux' not in k}
+        # does it compute loss for traditional head (originally MLP, now dualddetect)?
 
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets)['indices']
@@ -302,6 +303,8 @@ class DFINECriterion(nn.Module):
                 l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
                 l_dict = {k + '_pre': v for k, v in l_dict.items()}
                 losses.update(l_dict)
+
+            
 
         # In case of encoder auxiliary losses.
         if 'enc_aux_outputs' in outputs:

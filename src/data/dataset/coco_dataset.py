@@ -46,6 +46,7 @@ class CocoDetection(torchvision.datasets.CocoDetection, DetDataset):
 
     def load_item(self, idx):
         image, target = super(CocoDetection, self).__getitem__(idx)
+
         image_id = self.ids[idx]
         target = {'image_id': image_id, 'annotations': target}
 

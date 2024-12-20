@@ -11,8 +11,9 @@ train_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: /data/COCO2017/train2017/
-    ann_file: /data/COCO2017/annotations/instances_train2017.json
+    img_folder: ../datasets/coco/images/train2017/
+    ann_file: ../datasets/coco/annotations/instances_train2017.json
+    
     return_masks: False
     transforms:
       type: Compose
@@ -21,15 +22,16 @@ train_dataloader:
   num_workers: 4
   drop_last: True
   collate_fn:
-    type: BatchImageCollateFunction
+    type: BatchImageCollateFunction # check this!
+  
 
 
 val_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: /data/COCO2017/val2017/
-    ann_file: /data/COCO2017/annotations/instances_val2017.json
+    img_folder: ../datasets/coco/images/val2017/
+    ann_file: ../datasets/coco/annotations/instances_val2017.json
     return_masks: False
     transforms:
       type: Compose

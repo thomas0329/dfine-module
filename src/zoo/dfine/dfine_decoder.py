@@ -366,9 +366,9 @@ class TransformerDecoder(nn.Module):
                 value = self.value_op(memory, None, query_pos_embed.shape[-1], memory_mask, spatial_shapes)
                 output = F.interpolate(output, size=query_pos_embed.shape[-1])
                 output_detach = output.detach()
-
+            # print('output', output.shape)
             output = layer(output, ref_points_input, value, spatial_shapes, attn_mask, query_pos_embed)
-
+            # print('output', output.shape)
             if i == 0 : # the output of the first layer is fed to pre_bbox_head.
                 # Initial bounding box predictions with inverse sigmoid refinement
                 # returns [d1, d2] during training
@@ -463,7 +463,6 @@ class DFINETransformer(nn.Module):
         self.eps = eps
         self.num_layers = num_layers
         self.eval_spatial_size = eval_spatial_size
-        print('eval spatia size', self.eval_spatial_size)
         self.aux_loss = aux_loss
         self.reg_max = reg_max
         self.no = num_classes + self.reg_max * 4
@@ -610,7 +609,6 @@ class DFINETransformer(nn.Module):
         else: 
             name = 'input_proj2'
         setattr(self, name, input_proj)
-        print(f"Constructed {name}")
 
     def _get_encoder_input(self, feats: List[torch.Tensor], aux):
         # get projection features.
@@ -731,11 +729,13 @@ class DFINETransformer(nn.Module):
 
         if denoising_bbox_unact is not None:
             enc_topk_bbox_unact = torch.concat([denoising_bbox_unact, enc_topk_bbox_unact], dim=1)
-            content = torch.concat([denoising_logits, content], dim=1)
+            content = torch.concat([denoising_logits, content], dim=1)  # extends the shape from 300 to 500
+            
 
         return content, enc_topk_bbox_unact, enc_topk_bboxes_list, enc_topk_logits_list
 
     def _select_topk(self, memory: torch.Tensor, outputs_logits: torch.Tensor, outputs_anchors_unact: torch.Tensor, topk: int):
+        
         if self.query_select_method == 'default':
             _, topk_ind = torch.topk(outputs_logits.max(-1).values, topk, dim=-1)
 
@@ -790,6 +790,7 @@ class DFINETransformer(nn.Module):
             self._get_decoder_input(main_memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
 
         # decoder: FDR
+        # not used!
         aux_out_bboxes, aux_out_logits, aux_out_corners, aux_out_refs, aux_pre_bboxes, aux_pre_logits, aux_d_dualddetect = self.decoder(   # error
             aux_init_ref_contents,
             aux_init_ref_points_unact,
@@ -850,7 +851,6 @@ class DFINETransformer(nn.Module):
                                                         dn_out_corners[-1], dn_out_logits[-1])
                 out['dn_pre_outputs'] = {'pred_logits': dn_pre_logits, 'pred_boxes': dn_pre_bboxes}
                 out['dn_meta'] = dn_meta
-        print('dfine out')
         # d1
         # torch.Size([16, 144, 80, 80])
         # torch.Size([16, 144, 40, 40])
@@ -860,7 +860,7 @@ class DFINETransformer(nn.Module):
         # targets: # [3xx, 6]
         dual_out = aux_d_dualddetect, main_d_dualddetect
 
-        return out, dual_out
+        return out, dual_out    
 
 
     @torch.jit.unused

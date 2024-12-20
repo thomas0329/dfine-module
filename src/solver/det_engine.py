@@ -20,12 +20,18 @@ from ..optim import ModelEMA, Warmup
 from ..data import CocoEvaluator
 from ..misc import MetricLogger, SmoothedValue, dist_utils
 
+def to(module, device):
+    return module.to(device) if hasattr(module, 'to') else module
 
+# optimizer should be given model parameters during initialzation!
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0, **kwargs):
+    print('device in train one ep', device)
     model.train()
     criterion.train()
+    criterion = to(criterion, device)
+
     metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
@@ -34,18 +40,22 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     writer :SummaryWriter = kwargs.get('writer', None)
 
     ema :ModelEMA = kwargs.get('ema', None)
+    ema = to(ema, device)
     scaler :GradScaler = kwargs.get('scaler', None)
     lr_warmup_scheduler :Warmup = kwargs.get('lr_warmup_scheduler', None)
 
     for i, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+        # TODO: check how dfine generates targets from image and bbox 
+        print('one batch')
         samples = samples.to(device)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]    # preprocess tarets
         global_step = epoch * len(data_loader) + i
         metas = dict(epoch=epoch, step=i, global_step=global_step, epoch_step=len(data_loader))
 
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
-                outputs = model(samples, targets=targets)
+                outputs, _ = model(samples, targets=targets)
+                # out, dual_out
 
             if torch.isnan(outputs['pred_boxes']).any() or torch.isinf(outputs['pred_boxes']).any():
                 print(outputs['pred_boxes'])
@@ -63,18 +73,20 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                 loss_dict = criterion(outputs, targets, **metas)
 
             loss = sum(loss_dict.values())
+            torch.use_deterministic_algorithms(True, warn_only=True)    # my modification
             scaler.scale(loss).backward()
 
             if max_norm > 0:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
-
+            # do I have to put the optimizer to device?
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
 
         else:
-            outputs = model(samples, targets=targets)
+            outputs, _ = model(samples, targets=targets)
+            # out, dual_out
             loss_dict = criterion(outputs, targets, **metas)
 
             loss : torch.Tensor = sum(loss_dict.values())
@@ -86,7 +98,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
             optimizer.step()
 
-        # ema
+        # ema: depends on model!
         if ema is not None:
             ema.update(model)
 

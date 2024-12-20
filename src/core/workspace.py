@@ -99,6 +99,7 @@ def create(type_or_name, global_cfg=GLOBAL_CONFIG, **kwargs):
 
     if name in global_cfg:
         if hasattr(global_cfg[name], '__dict__'):
+            
             return global_cfg[name]
     else:
         raise ValueError('The module {} is not registered'.format(name))
@@ -176,5 +177,4 @@ def create(type_or_name, global_cfg=GLOBAL_CONFIG, **kwargs):
     # extra_args = set(module_kwargs.keys()) - set(arg_names)
     # if len(extra_args) > 0:
     #     raise RuntimeError(f'Error: unknown args {extra_args} for {module}')
-
     return module(**module_kwargs)

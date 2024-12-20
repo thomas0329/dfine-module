@@ -26,8 +26,8 @@ class DFINE(nn.Module):
     def forward(self, x, targets=None):
         x = self.backbone(x)
         x = self.encoder(x)
-        x = self.decoder(x, targets)
-
+        x = self.decoder(x, targets)    
+        # targets is passed to DFINETransformer only
         return x
 
     def deploy(self, ):

@@ -169,6 +169,7 @@ class YAMLConfig(BaseConfig):
             # pop unexpected key for dataloader init
             _ = global_cfg[name].pop('total_batch_size')
         print(f'building {name} with batch_size={bs}...')
+        # import pdb; pdb.set_trace()
         loader = create(name, global_cfg, batch_size=bs)
         loader.shuffle = self.yaml_cfg[name].get('shuffle', False)
         return loader

@@ -37,31 +37,32 @@ class BaseSolver(object):
             169, 70, 328, 226
         ]
     def _setup(self):
+        
         """Avoid instantiating unnecessary classes"""
         cfg = self.cfg
-        if cfg.device:
-            device = torch.device(cfg.device)
-        else:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # if cfg.device:
+        #     device = torch.device(cfg.device)
+        # else:
+        #     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        self.model = cfg.model
+        # self.model = cfg.model
 
         # NOTE: Must load_tuning_state before EMA instance building
         if self.cfg.tuning:
             print(f'Tuning checkpoint from {self.cfg.tuning}')
             self.load_tuning_state(self.cfg.tuning)
 
-        self.model = dist_utils.warp_model(
-            self.model.to(device), sync_bn=cfg.sync_bn, find_unused_parameters=cfg.find_unused_parameters
-        )
+        # self.model = dist_utils.warp_model(
+        #     self.model.to(device), sync_bn=cfg.sync_bn, find_unused_parameters=cfg.find_unused_parameters
+        # )
+        # print('device', device)
+        # self.criterion = self.to(cfg.criterion, device)
+        # self.postprocessor = self.to(cfg.postprocessor, device)
 
-        self.criterion = self.to(cfg.criterion, device)
-        self.postprocessor = self.to(cfg.postprocessor, device)
-
-        self.ema = self.to(cfg.ema, device)
+        # self.ema = self.to(cfg.ema, device)
         self.scaler = cfg.scaler
 
-        self.device = device
+        # self.device = device
         self.last_epoch = self.cfg.last_epoch
 
         self.output_dir = Path(cfg.output_dir)
