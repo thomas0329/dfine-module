@@ -225,7 +225,7 @@ class DFINECriterion(nn.Module):
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
 
-    def forward(self, outputs, targets, **kwargs):
+    def forward(self, outputs, targets, **kwargs):  # criterion(outputs, targets)
         """ This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
@@ -233,10 +233,13 @@ class DFINECriterion(nn.Module):
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
         outputs_without_aux = {k: v for k, v in outputs.items() if 'aux' not in k}
-        # does it compute loss for traditional head (originally MLP, now dualddetect)?
+        # print('outputs_without_aux')
+        # for key in outputs_without_aux.keys():
+        #     print(key)
+        # print('outputs_without_aux[pred_boxes]', outputs_without_aux['pred_boxes'])
 
         # Retrieve the matching between the outputs of the last layer and the targets
-        indices = self.matcher(outputs_without_aux, targets)['indices']
+        indices = self.matcher(outputs_without_aux, targets)['indices'] # err
         self._clear_cache()
 
         # Get the matching union set across all decoder layers.

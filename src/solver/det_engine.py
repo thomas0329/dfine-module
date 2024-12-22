@@ -75,8 +75,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             loss = sum(loss_dict.values())
             torch.use_deterministic_algorithms(True, warn_only=True)    # my modification
             scaler.scale(loss).backward()
-
-            if max_norm > 0:
+            
+            if max_norm > 0:    # true
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
             # do I have to put the optimizer to device?

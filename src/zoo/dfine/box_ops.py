@@ -10,8 +10,10 @@ from torchvision.ops.boxes import box_area
 
 def box_cxcywh_to_xyxy(x):
     x_c, y_c, w, h = x.unbind(-1)
+    # w tensor([nan, nan, nan,  ..., nan, nan, nan], device='cuda:0')
     b = [(x_c - 0.5 * w.clamp(min=0.0)), (y_c - 0.5 * h.clamp(min=0.0)),
          (x_c + 0.5 * w.clamp(min=0.0)), (y_c + 0.5 * h.clamp(min=0.0))]
+
     return torch.stack(b, dim=-1)
 
 
@@ -51,7 +53,9 @@ def generalized_box_iou(boxes1, boxes2):
     """
     # degenerate boxes gives inf / nan results
     # so do an early check
-    assert (boxes1[:, 2:] >= boxes1[:, :2]).all()
+
+    # TODO: change the bbox format into the normalized coco format
+    assert (boxes1[:, 2:] >= boxes1[:, :2]).all()   # this
     assert (boxes2[:, 2:] >= boxes2[:, :2]).all()
     iou, union = box_iou(boxes1, boxes2)
 

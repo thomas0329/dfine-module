@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 from typing import List
+from torch.nn import Sigmoid
 
 from .dfine_utils import weighting_function, distance2bbox
 from .denoising import get_contrastive_denoising_training_group
@@ -371,11 +372,11 @@ class TransformerDecoder(nn.Module):
             # print('output', output.shape)
             if i == 0 : # the output of the first layer is fed to pre_bbox_head.
                 # Initial bounding box predictions with inverse sigmoid refinement
-                # returns [d1, d2] during training
-                # pre_bbox_head(output) should be sth like ([1, 300, 4])
-                # input to dualddetect torch.Size([1, 300, 512])
-                # pre_bbox_head(output) torch.Size([1, 300, 4])
-                dbox, d_dualddetect = pre_bbox_head(output, aux)
+                # print('input to trad head', output) # nan
+                dbox, d_ddetect = pre_bbox_head(output)
+                # print('dbox', dbox) # nan or all zero, why?
+                # dbox torch.Size([1, 4, 300])
+                # inverse_sigmoid(ref_points_detach) torch.Size([1, 300, 4])
                 pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
@@ -384,6 +385,7 @@ class TransformerDecoder(nn.Module):
             pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
 
             # seems to refine prediction from the first layer in each iteration
+            # print('ref_points_initial', ref_points_initial) # nan
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
 
             if self.training or i == self.eval_idx:
@@ -403,7 +405,7 @@ class TransformerDecoder(nn.Module):
             output_detach = output.detach()
 
         return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_dualddetect
+               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_ddetect
 
 
 @register()
@@ -414,7 +416,6 @@ class DFINETransformer(nn.Module):
                  num_classes=80,
                  hidden_dim=256,
                  num_queries=300,
-                 feat_channels=[512, 512, 512],   # is this the feat channels of the input feat maps? no!
                  feat_channels2=[256, 512, 512],
                 # feats[0] shape torch.Size([1, 256, 80, 80])
                 # feats[1] shape torch.Size([1, 256, 40, 40])
@@ -442,8 +443,8 @@ class DFINETransformer(nn.Module):
                  reg_scale=4.,
                  layer_scale=1):
         super().__init__()
-        assert len(feat_channels) <= num_levels
-        assert len(feat_strides) == len(feat_channels)
+        assert len(feat_channels2) <= num_levels
+        assert len(feat_strides) == len(feat_channels2)
 
         for _ in range(num_levels - len(feat_strides)):
             feat_strides.append(feat_strides[-1] * 2)
@@ -473,7 +474,7 @@ class DFINETransformer(nn.Module):
         self.query_select_method = query_select_method
 
         # backbone feature projection
-        self._build_input_proj_layer(feat_channels)
+        # self._build_input_proj_layer(feat_channels)
         self._build_input_proj_layer(feat_channels2)
         
         # Transformer module
@@ -536,7 +537,7 @@ class DFINETransformer(nn.Module):
             self.anchors, self.valid_mask = self._generate_anchors()    # spatial space not passed!
 
 
-        self._reset_parameters(feat_channels)
+        self._reset_parameters(feat_channels2)
 
         self.training = False   # my modificaton
 
@@ -568,9 +569,9 @@ class DFINETransformer(nn.Module):
         init.xavier_uniform_(self.query_pos_head.layers[1].weight)
 
         # reset both?
-        for m, in_channels in zip(self.input_proj, feat_channels):
-            if in_channels != self.hidden_dim:
-                init.xavier_uniform_(m[0].weight)
+        # for m, in_channels in zip(self.input_proj, feat_channels):
+        #     if in_channels != self.hidden_dim:
+        #         init.xavier_uniform_(m[0].weight)
 
         for m, in_channels in zip(self.input_proj2, feat_channels):
             if in_channels != self.hidden_dim:
@@ -612,10 +613,11 @@ class DFINETransformer(nn.Module):
 
     def _get_encoder_input(self, feats: List[torch.Tensor], aux):
         # get projection features.
-        if aux:
-            input_proj = self.input_proj
-        else: 
-            input_proj = self.input_proj2
+        # if aux:
+        #     input_proj = self.input_proj
+        # else: 
+        #     input_proj = self.input_proj2
+        input_proj = self.input_proj2
 
         proj_feats = [input_proj[i](feat) for i, feat in enumerate(feats)]
         if self.num_levels > len(proj_feats):
@@ -763,11 +765,12 @@ class DFINETransformer(nn.Module):
 
         # feats len 6
         # input channels [512, 512, 512, 256, 512, 512]
-        aux_feats = feats[:3]
-        main_feats = feats[3:]
+        # aux_feats = feats[:3]
+        # main_feats = feats[3:]
         # input projection and embedding
-        aux_memory, spatial_shapes = self._get_encoder_input(aux_feats, aux=True)
-        main_memory, _ = self._get_encoder_input(main_feats ,aux=False)
+        memory, spatial_shapes = self._get_encoder_input(feats, aux=True)
+        # aux_memory, spatial_shapes = self._get_encoder_input(aux_feats, aux=True)
+        # main_memory, _ = self._get_encoder_input(main_feats ,aux=False)
         # print('spatial shapes', spatial_shapes) # [[32, 32], [16, 16], [8, 8]]
         # prepare denoising training
         if self.training and self.num_denoising > 0:
@@ -783,34 +786,34 @@ class DFINETransformer(nn.Module):
         else:
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
-        aux_init_ref_contents, aux_init_ref_points_unact, aux_enc_topk_bboxes_list, aux_enc_topk_logits_list = \
-            self._get_decoder_input(aux_memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
+        init_ref_contents, init_ref_points_unact, enc_topk_bboxes_list, enc_topk_logits_list = \
+            self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
         
-        main_init_ref_contents, main_init_ref_points_unact, main_enc_topk_bboxes_list, main_enc_topk_logits_list = \
-            self._get_decoder_input(main_memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
+        # main_init_ref_contents, main_init_ref_points_unact, main_enc_topk_bboxes_list, main_enc_topk_logits_list = \
+        #     self._get_decoder_input(main_memory, spatial_shapes, denoising_logits, denoising_bbox_unact) # what is this for?
 
         # decoder: FDR
         # not used!
-        aux_out_bboxes, aux_out_logits, aux_out_corners, aux_out_refs, aux_pre_bboxes, aux_pre_logits, aux_d_dualddetect = self.decoder(   # error
-            aux_init_ref_contents,
-            aux_init_ref_points_unact,
-            aux_memory,
-            spatial_shapes,
-            self.dec_bbox_head,
-            self.dec_score_head,
-            self.query_pos_head,
-            self.pre_bbox_head,
-            self.integral,
-            self.up,
-            self.reg_scale,
-            attn_mask=attn_mask,
-            dn_meta=dn_meta, 
-            aux=True)
+        # aux_out_bboxes, aux_out_logits, aux_out_corners, aux_out_refs, aux_pre_bboxes, aux_pre_logits, aux_d_dualddetect = self.decoder(   # error
+        #     aux_init_ref_contents,
+        #     aux_init_ref_points_unact,
+        #     aux_memory,
+        #     spatial_shapes,
+        #     self.dec_bbox_head,
+        #     self.dec_score_head,
+        #     self.query_pos_head,
+        #     self.pre_bbox_head,
+        #     self.integral,
+        #     self.up,
+        #     self.reg_scale,
+        #     attn_mask=attn_mask,
+        #     dn_meta=dn_meta, 
+        #     aux=True)
         
-        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, main_d_dualddetect = self.decoder(   # error
-            main_init_ref_contents,
-            main_init_ref_points_unact,
-            main_memory,
+        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, main_d_ddetect = self.decoder(   # error
+            init_ref_contents,
+            init_ref_points_unact,
+            memory,
             spatial_shapes,
             self.dec_bbox_head,
             self.dec_score_head,
@@ -822,6 +825,8 @@ class DFINETransformer(nn.Module):
             attn_mask=attn_mask,
             dn_meta=dn_meta,
             aux=False)
+        
+        
 
         if self.training and dn_meta is not None:
             dn_pre_logits, main_pre_logits = torch.split(main_pre_logits, dn_meta['dn_num_split'], dim=1)
@@ -842,7 +847,7 @@ class DFINETransformer(nn.Module):
         if self.training and self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss2(main_out_logits[:-1], main_out_bboxes[:-1], out_corners[:-1], out_refs[:-1],
                                                      out_corners[-1], main_out_logits[-1])
-            out['enc_aux_outputs'] = self._set_aux_loss(main_enc_topk_logits_list, main_enc_topk_bboxes_list)
+            out['enc_aux_outputs'] = self._set_aux_loss(enc_topk_logits_list, enc_topk_bboxes_list)
             out['pre_outputs'] = {'pred_logits': main_pre_logits, 'pred_boxes': main_pre_bboxes}
             out['enc_meta'] = {'class_agnostic': self.query_select_method == 'agnostic'}
 
@@ -858,9 +863,12 @@ class DFINETransformer(nn.Module):
         # d2: same
 
         # targets: # [3xx, 6]
-        dual_out = aux_d_dualddetect, main_d_dualddetect
+        # dual_out = aux_d_dualddetect, main_d_dualddetect
 
-        return out, dual_out    
+        # return out, dual_out
+        
+        return out, main_d_ddetect    
+        # print(out['pred_boxes'])  # tensor([[[nan, nan, nan, nan]
 
 
     @torch.jit.unused

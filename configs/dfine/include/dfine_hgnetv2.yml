@@ -36,7 +36,7 @@ HybridEncoder:
 
 
 DFINETransformer:
-  feat_channels: [512, 512, 512]
+  # feat_channels: [512, 512, 512]
   feat_channels2: [256, 512, 512]
   # feat_channels: [512, 512, 512, 256, 512, 512]
   feat_strides: [8, 16, 32]
