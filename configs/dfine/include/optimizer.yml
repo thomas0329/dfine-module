@@ -1,5 +1,4 @@
-# use_amp: True
-use_amp: False
+use_amp: True
 use_ema: True
 ema:
   type: ModelEMA

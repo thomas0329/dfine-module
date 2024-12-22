@@ -20,7 +20,7 @@ __all__ = ['ModelEMA']
 
 
 @register()
-class ModelEMA(object):
+class ModelEMA(object): # dfine
     """
     Model Exponential Moving Average from https://github.com/rwightman/pytorch-image-models
     Keep a moving average of everything in the model state_dict (parameters and buffers).

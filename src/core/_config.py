@@ -175,7 +175,7 @@ class BaseConfig(object):
 
     @property
     def scaler(self) -> GradScaler:
-        print('super: use amp', self.use_amp)
+        
         if self._scaler is None and self.use_amp and torch.cuda.is_available():
             
             self._scaler = GradScaler()

@@ -23,7 +23,7 @@ from ..misc import MetricLogger, SmoothedValue, dist_utils
 def to(module, device):
     return module.to(device) if hasattr(module, 'to') else module
 
-# optimizer should be given model parameters during initialzation!
+# optimizer should be given model parameters during initialization!
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0, **kwargs):
