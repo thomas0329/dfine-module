@@ -46,12 +46,13 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
     for i, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         # TODO: check how dfine generates targets from image and bbox 
-        print('one batch')
+        
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]    # preprocess tarets
         global_step = epoch * len(data_loader) + i
         metas = dict(epoch=epoch, step=i, global_step=global_step, epoch_step=len(data_loader))
 
+        torch.use_deterministic_algorithms(True, warn_only=True)    # my modification
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
                 outputs, _ = model(samples, targets=targets)
@@ -73,7 +74,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                 loss_dict = criterion(outputs, targets, **metas)
 
             loss = sum(loss_dict.values())
-            torch.use_deterministic_algorithms(True, warn_only=True)    # my modification
+            
             scaler.scale(loss).backward()
             
             if max_norm > 0:    # true
@@ -85,6 +86,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             optimizer.zero_grad()
 
         else:
+            
             outputs, _ = model(samples, targets=targets)
             # out, dual_out
             loss_dict = criterion(outputs, targets, **metas)

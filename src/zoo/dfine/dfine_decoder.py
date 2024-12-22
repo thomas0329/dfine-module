@@ -826,6 +826,8 @@ class DFINETransformer(nn.Module):
             dn_meta=dn_meta,
             aux=False)
         
+        # sig = Sigmoid()
+        # main_out_bboxes = sig(main_out_bboxes)
         
 
         if self.training and dn_meta is not None:

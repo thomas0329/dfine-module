@@ -92,7 +92,9 @@ class YAMLConfig(BaseConfig):
     @property
     def scaler(self, ):
         if self._scaler is None and self.yaml_cfg.get('use_amp', False):
+            print('create scalar')
             self._scaler = create('scaler', self.global_cfg)
+        print('return super scalar')
         return super().scaler
 
     @property
