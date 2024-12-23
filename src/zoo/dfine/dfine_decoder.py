@@ -355,11 +355,11 @@ class TransformerDecoder(nn.Module):
             project = weighting_function(self.reg_max, up, reg_scale)
         else:
             project = self.project
-
         ref_points_detach = F.sigmoid(ref_points_unact)
 
         for i, layer in enumerate(self.layers):
             ref_points_input = ref_points_detach.unsqueeze(2)
+            # ref_points_detach: torch.float32
             query_pos_embed = query_pos_head(ref_points_detach).clamp(min=-10, max=10)
 
             # TODO Adjust scale if needed for detachable wider layers
@@ -463,7 +463,8 @@ class DFINETransformer(nn.Module):
         self.num_queries = num_queries
         self.eps = eps
         self.num_layers = num_layers
-        self.eval_spatial_size = eval_spatial_size
+        # self.eval_spatial_size = eval_spatial_size
+        self.eval_spatial_size = None
         self.aux_loss = aux_loss
         self.reg_max = reg_max
         self.no = num_classes + self.reg_max * 4
@@ -756,10 +757,7 @@ class DFINETransformer(nn.Module):
         return topk_memory, topk_logits, topk_anchors
 
     def forward(self, feats, targets=None):
-        print('len feats', len(feats))
-        print('x0', feats[0].shape)
-        print('x1', feats[1].shape)
-        print('x2', feats[2].shape)
+        print('feats', feats[0].dtype)
         # feats len 6
         # input channels [512, 512, 512, 256, 512, 512]
         # aux_feats = feats[:3]
