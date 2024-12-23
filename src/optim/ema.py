@@ -32,7 +32,6 @@ class ModelEMA(object): # dfine
     """
     def __init__(self, model: nn.Module, decay: float=0.9999, warmups: int=1000, start: int=0):
         super().__init__()
-
         self.module = deepcopy(dist_utils.de_parallel(model)).eval()
         # if next(model.parameters()).device.type != 'cpu':
         #     self.module.half()  # FP16 EMA

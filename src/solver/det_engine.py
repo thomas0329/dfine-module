@@ -46,7 +46,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
     for i, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         # TODO: check how dfine generates targets from image and bbox 
-        
+        print('samples.shape', samples.shape)
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]    # preprocess tarets
         global_step = epoch * len(data_loader) + i

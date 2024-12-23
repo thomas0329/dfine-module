@@ -244,7 +244,8 @@ class Gate(nn.Module):
         return self.norm(gate1 * x1 + gate2 * x2)
 
 
-class Integral(nn.Module):
+class Integral(nn.Module):  # pred_corners: distribution
+
     """
     A static layer that calculates integral results from a distribution.
 
@@ -385,7 +386,6 @@ class TransformerDecoder(nn.Module):
             pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
 
             # seems to refine prediction from the first layer in each iteration
-            # print('ref_points_initial', ref_points_initial) # nan
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
 
             if self.training or i == self.eval_idx:
@@ -695,14 +695,8 @@ class DFINETransformer(nn.Module):
         
         # memory = torch.where(valid_mask, memory, 0)
         # TODO fix type error for onnx export
-        # print('memory shape', memory.shape)
-        # print('valid mask shape', valid_mask.shape)
-        # in dfine
-        # memory shape torch.Size([1, 8400, 256])
-        # valid mask shape torch.Size([1, 8400, 1])
-        # now
-        # memory shape torch.Size([1, 1344, 512]), correct
-        # valid mask shape torch.Size([1, 8400, 1])
+        print('mem', memory.shape)
+        print('valid_mask', valid_mask.shape)
         memory = valid_mask.to(memory.dtype) * memory   # tensor size mismatch, but what is this line for?
 
         output_memory :torch.Tensor = self.enc_output(memory)
@@ -762,7 +756,10 @@ class DFINETransformer(nn.Module):
         return topk_memory, topk_logits, topk_anchors
 
     def forward(self, feats, targets=None):
-
+        print('len feats', len(feats))
+        print('x0', feats[0].shape)
+        print('x1', feats[1].shape)
+        print('x2', feats[2].shape)
         # feats len 6
         # input channels [512, 512, 512, 256, 512, 512]
         # aux_feats = feats[:3]
