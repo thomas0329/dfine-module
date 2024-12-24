@@ -31,13 +31,22 @@ def weighting_function(reg_max, up, reg_scale, deploy=False):
         values = [-upper_bound2] + left_values + [torch.zeros_like(up[0][None])] + right_values + [upper_bound2]
         return torch.tensor(values, dtype=up.dtype, device=up.device)
     else:
+        print('not deploy')
         upper_bound1 = abs(up[0]) * abs(reg_scale)
         upper_bound2 = abs(up[0]) * abs(reg_scale) * 2
         step = (upper_bound1 + 1) ** (2 / (reg_max - 2))
         left_values = [-(step) ** i + 1 for i in range(reg_max // 2 - 1, 0, -1)]
         right_values = [(step) ** i - 1 for i in range(1, reg_max // 2)]
-        values = [-upper_bound2] + left_values + [torch.zeros_like(up[0][None])] + right_values + [upper_bound2]
+        # print('[-upper_bound2]', len([-upper_bound2]))
+        # print('left_values', len(left_values))
+        # print('[torch.zeros_like(up[0][None])]', len([torch.zeros_like(up[0][None])]))
+        # print('right_values', len(right_values))
+        # print('[upper_bound2]', len([upper_bound2]))
+        # values = [-upper_bound2] + left_values + [torch.zeros_like(up[0][None])] + right_values + [upper_bound2]
+        values = [-upper_bound2] + left_values + right_values + [upper_bound2]
+        # print('values', len(values))
         return torch.cat(values, 0)
+        return values
 
 
 def translate_gt(gt, reg_max, reg_scale, up):

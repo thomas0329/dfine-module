@@ -47,7 +47,7 @@ def main(args, ) -> None:
     print('cfg: ', cfg.__dict__)
 
     solver = TASKS[cfg.yaml_cfg['task']](cfg)
-
+    
     if args.test_only:
         solver.val()
     else:

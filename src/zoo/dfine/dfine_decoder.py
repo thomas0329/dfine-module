@@ -264,7 +264,10 @@ class Integral(nn.Module):  # pred_corners: distribution
 
     def forward(self, x, project):
         shape = x.shape
-        x = F.softmax(x.reshape(-1, self.reg_max + 1), dim=1)
+        # x = F.softmax(x.reshape(-1, self.reg_max + 1), dim=1)
+        x = F.softmax(x.reshape(-1, self.reg_max), dim=1)
+        print('x', x.shape)
+        print('project.to(x.device)', project.to(x.device).shape)
         x = F.linear(x, project.to(x.device)).reshape(-1, 4)
         return x.reshape(list(shape[:-1]) + [-1])
 
@@ -280,7 +283,8 @@ class LQE(nn.Module):
 
     def forward(self, scores, pred_corners):
         B, L, _ = pred_corners.size()
-        prob = F.softmax(pred_corners.reshape(B, L, 4, self.reg_max+1), dim=-1)
+        # prob = F.softmax(pred_corners.reshape(B, L, 4, self.reg_max+1), dim=-1)
+        prob = F.softmax(pred_corners.reshape(B, L, 4, self.reg_max), dim=-1)
         prob_topk, _ = prob.topk(self.k, dim=-1)
         stat = torch.cat([prob_topk, prob_topk.mean(dim=-1, keepdim=True)], dim=-1)
         quality_score = self.reg_conf(stat.reshape(B, L, -1))
@@ -384,14 +388,15 @@ class TransformerDecoder(nn.Module):
 
             # Refine bounding box corners using FDR, integrating previous layer's corrections
             pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
-
-            # seems to refine prediction from the first layer in each iteration
+            # pred_corners torch.Size([1, 300, 132])
+            
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
-
-            if self.training or i == self.eval_idx:
+            print('eval_idx', self.eval_idx)
+            if self.training or i == self.eval_idx: # 5
                 scores = score_head[i](output)
                 # Lqe does not affect the performance here.
                 scores = self.lqe_layers[i](scores, pred_corners)
+                # scores torch.Size([1, 300, 80]), class!
                 dec_out_logits.append(scores)
                 dec_out_bboxes.append(inter_ref_bbox)
                 dec_out_pred_corners.append(pred_corners)
@@ -403,10 +408,13 @@ class TransformerDecoder(nn.Module):
             pred_corners_undetach = pred_corners
             ref_points_detach = inter_ref_bbox.detach()
             output_detach = output.detach()
-
+        
+        # what's dec_out_logits?
         return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
                torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_ddetect
-
+        # what I need: predicted distribution: ?, class: dec_out_logits, bbox: dec_out_bboxes
+        # their shape:                                 [1, 300, 80]  , [1, 300, 4]
+        # shape required by yolo loss: [16, 8400, 64], [16, 8400, 80], [16, 8400, 4]
 
 @register()
 class DFINETransformer(nn.Module):
@@ -467,6 +475,7 @@ class DFINETransformer(nn.Module):
         self.eval_spatial_size = None
         self.aux_loss = aux_loss
         self.reg_max = reg_max
+        print('self reg max', self.reg_max) # 32
         self.no = num_classes + self.reg_max * 4
 
         assert query_select_method in ('default', 'one2many', 'agnostic'), ''
@@ -523,9 +532,11 @@ class DFINETransformer(nn.Module):
             [nn.Linear(hidden_dim, num_classes) for _ in range(self.eval_idx + 1)]
           + [nn.Linear(scaled_dim, num_classes) for _ in range(num_layers - self.eval_idx - 1)])
         self.pre_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3)  # does not output class info?
-        self.dec_bbox_head = nn.ModuleList(
-            [MLP(hidden_dim, hidden_dim, 4 * (self.reg_max+1), 3) for _ in range(self.eval_idx + 1)]
-          + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max+1), 3) for _ in range(num_layers - self.eval_idx - 1)])
+        self.dec_bbox_head = nn.ModuleList( # for producing distribution
+        #     [MLP(hidden_dim, hidden_dim, 4 * (self.reg_max+1), 3) for _ in range(self.eval_idx + 1)]
+        #   + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max+1), 3) for _ in range(num_layers - self.eval_idx - 1)])
+            [MLP(hidden_dim, hidden_dim, 4 * (self.reg_max), 3) for _ in range(self.eval_idx + 1)]
+          + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max), 3) for _ in range(num_layers - self.eval_idx - 1)])
         self.integral = Integral(self.reg_max)
 
         # init encoder output anchors and valid_mask
@@ -755,7 +766,7 @@ class DFINETransformer(nn.Module):
             index=topk_ind.unsqueeze(-1).repeat(1, 1, memory.shape[-1]))
 
         return topk_memory, topk_logits, topk_anchors
-
+    
     def forward(self, feats, targets=None):
         print('feats', feats[0].dtype)
         # feats len 6
