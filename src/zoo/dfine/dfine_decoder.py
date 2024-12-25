@@ -266,8 +266,6 @@ class Integral(nn.Module):  # pred_corners: distribution
         shape = x.shape
         # x = F.softmax(x.reshape(-1, self.reg_max + 1), dim=1)
         x = F.softmax(x.reshape(-1, self.reg_max), dim=1)
-        print('x', x.shape)
-        print('project.to(x.device)', project.to(x.device).shape)
         x = F.linear(x, project.to(x.device)).reshape(-1, 4)
         return x.reshape(list(shape[:-1]) + [-1])
 
@@ -391,7 +389,6 @@ class TransformerDecoder(nn.Module):
             # pred_corners [1, 300, 132=33*4]
             
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
-            print('eval_idx', self.eval_idx)
             if self.training or i == self.eval_idx: # 5
                 scores = score_head[i](output)
                 # Lqe does not affect the performance here.
