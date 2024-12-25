@@ -31,7 +31,6 @@ def weighting_function(reg_max, up, reg_scale, deploy=False):
         values = [-upper_bound2] + left_values + [torch.zeros_like(up[0][None])] + right_values + [upper_bound2]
         return torch.tensor(values, dtype=up.dtype, device=up.device)
     else:
-        print('not deploy')
         upper_bound1 = abs(up[0]) * abs(reg_scale)
         upper_bound2 = abs(up[0]) * abs(reg_scale) * 2
         step = (upper_bound1 + 1) ** (2 / (reg_max - 2))

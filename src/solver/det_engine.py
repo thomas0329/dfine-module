@@ -23,11 +23,10 @@ from ..misc import MetricLogger, SmoothedValue, dist_utils
 def to(module, device):
     return module.to(device) if hasattr(module, 'to') else module
 
-# optimizer should be given model parameters during initialization!
+
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0, **kwargs):
-    print('device in train one ep', device)
     model.train()
     criterion.train()
     criterion = to(criterion, device)
@@ -46,7 +45,6 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
     for i, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         # TODO: check how dfine generates targets from image and bbox 
-        print('samples.shape', samples.shape)
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]    # preprocess tarets
         global_step = epoch * len(data_loader) + i
@@ -85,7 +83,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             scaler.update()
             optimizer.zero_grad()
 
-        else:
+        else:   # no scalar
             
             outputs, _ = model(samples, targets=targets)
             # out, dual_out
@@ -100,7 +98,6 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
             optimizer.step()
 
-        # ema: depends on model!
         if ema is not None:
             ema.update(model)
 
@@ -128,7 +125,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, 
 
 
 @torch.no_grad()

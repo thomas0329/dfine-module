@@ -704,8 +704,8 @@ class DFINETransformer(nn.Module):
         
         # memory = torch.where(valid_mask, memory, 0)
         # TODO fix type error for onnx export
-        print('mem', memory.shape)
-        print('valid_mask', valid_mask.shape)
+        # print('mem', memory.shape)
+        # print('valid_mask', valid_mask.shape)
         memory = valid_mask.to(memory.dtype) * memory   # tensor size mismatch, but what is this line for?
 
         output_memory :torch.Tensor = self.enc_output(memory)
@@ -765,7 +765,6 @@ class DFINETransformer(nn.Module):
         return topk_memory, topk_logits, topk_anchors
     
     def forward(self, feats, targets=None):
-        print('feats', feats[0].dtype)
         # feats len 6
         # input channels [512, 512, 512, 256, 512, 512]
         # aux_feats = feats[:3]
@@ -812,7 +811,7 @@ class DFINETransformer(nn.Module):
         #     attn_mask=attn_mask,
         #     dn_meta=dn_meta, 
         #     aux=True)
-        
+        # main_out_corners usable!
         main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, main_d_ddetect = self.decoder(   # error
             init_ref_contents,
             init_ref_points_unact,
@@ -838,7 +837,7 @@ class DFINETransformer(nn.Module):
             dn_pre_bboxes, main_pre_bboxes = torch.split(main_pre_bboxes, dn_meta['dn_num_split'], dim=1)
             dn_out_bboxes, main_out_bboxes = torch.split(main_out_bboxes, dn_meta['dn_num_split'], dim=2)
             dn_out_logits, main_out_logits = torch.split(main_out_logits, dn_meta['dn_num_split'], dim=2)
-
+            # refine main out corners! it already exists!
             dn_out_corners, main_out_corners = torch.split(main_out_corners, dn_meta['dn_num_split'], dim=2)
             dn_out_refs, out_refs = torch.split(main_out_refs, dn_meta['dn_num_split'], dim=2)
 
@@ -867,13 +866,9 @@ class DFINETransformer(nn.Module):
         # torch.Size([16, 144, 20, 20])
         # d2: same
 
-        # targets: # [3xx, 6]
-        # dual_out = aux_d_dualddetect, main_d_dualddetect
-
         # return out, dual_out
         
         return out, main_d_ddetect    
-        # print(out['pred_boxes'])  # tensor([[[nan, nan, nan, nan]
 
 
     @torch.jit.unused
