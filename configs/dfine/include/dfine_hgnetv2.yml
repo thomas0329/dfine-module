@@ -76,7 +76,8 @@ DFINECriterion:
   losses: ['vfl', 'boxes', 'local']
   alpha: 0.75
   gamma: 2.0
-  reg_max: 32
+  # reg_max: 32
+  reg_max: 16
 
   matcher:
     type: HungarianMatcher

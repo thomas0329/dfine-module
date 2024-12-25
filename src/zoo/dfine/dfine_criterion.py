@@ -132,7 +132,7 @@ class DFINECriterion(nn.Module):
             idx = self._get_src_permutation_idx(indices)
             target_boxes = torch.cat([t['boxes'][i] for t, (_, i) in zip(targets, indices)], dim=0)
 
-            pred_corners = outputs['pred_corners'][idx].reshape(-1, (self.reg_max+1))
+            pred_corners = outputs['pred_corners'][idx].reshape(-1, (self.reg_max))
             ref_points = outputs['ref_points'][idx].detach()
             with torch.no_grad():
                 if self.fgl_targets_dn is None and 'is_dn' in outputs:
@@ -152,8 +152,8 @@ class DFINECriterion(nn.Module):
                 pred_corners, target_corners, weight_right, weight_left, weight_targets, avg_factor=num_boxes)
 
             if 'teacher_corners' in outputs:
-                pred_corners = outputs['pred_corners'].reshape(-1, (self.reg_max+1))
-                target_corners = outputs['teacher_corners'].reshape(-1, (self.reg_max+1))
+                pred_corners = outputs['pred_corners'].reshape(-1, (self.reg_max))
+                target_corners = outputs['teacher_corners'].reshape(-1, (self.reg_max))
                 if torch.equal(pred_corners, target_corners):
                     losses['loss_ddf'] = pred_corners.sum() * 0
                 else:

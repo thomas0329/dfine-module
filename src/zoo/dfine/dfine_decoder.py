@@ -388,7 +388,7 @@ class TransformerDecoder(nn.Module):
 
             # Refine bounding box corners using FDR, integrating previous layer's corrections
             pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
-            # pred_corners torch.Size([1, 300, 132])
+            # pred_corners [1, 300, 132=33*4]
             
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
             print('eval_idx', self.eval_idx)
@@ -412,8 +412,8 @@ class TransformerDecoder(nn.Module):
         # what's dec_out_logits?
         return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
                torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_ddetect
-        # what I need: predicted distribution: ?, class: dec_out_logits, bbox: dec_out_bboxes
-        # their shape:                                 [1, 300, 80]  , [1, 300, 4]
+        # what I need: predicted distribution: dec_out_pred_corners, class: dec_out_logits, bbox: dec_out_bboxes
+        # their shape:                 [1, 300, 132],  [1, 300, 80]  , [1, 300, 4]
         # shape required by yolo loss: [16, 8400, 64], [16, 8400, 80], [16, 8400, 4]
 
 @register()
@@ -842,19 +842,19 @@ class DFINETransformer(nn.Module):
             dn_out_bboxes, main_out_bboxes = torch.split(main_out_bboxes, dn_meta['dn_num_split'], dim=2)
             dn_out_logits, main_out_logits = torch.split(main_out_logits, dn_meta['dn_num_split'], dim=2)
 
-            dn_out_corners, out_corners = torch.split(main_out_corners, dn_meta['dn_num_split'], dim=2)
+            dn_out_corners, main_out_corners = torch.split(main_out_corners, dn_meta['dn_num_split'], dim=2)
             dn_out_refs, out_refs = torch.split(main_out_refs, dn_meta['dn_num_split'], dim=2)
 
 
         if self.training:
-            out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1], 'pred_corners': out_corners[-1],
+            out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1], 'pred_corners': main_out_corners[-1],
                    'ref_points': out_refs[-1], 'up': self.up, 'reg_scale': self.reg_scale}
         else:
-            out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1]}
+            out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1], 'pred_corners': main_out_corners[-1]}
 
         if self.training and self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss2(main_out_logits[:-1], main_out_bboxes[:-1], out_corners[:-1], out_refs[:-1],
-                                                     out_corners[-1], main_out_logits[-1])
+            out['aux_outputs'] = self._set_aux_loss2(main_out_logits[:-1], main_out_bboxes[:-1], main_out_corners[:-1], out_refs[:-1],
+                                                     main_out_corners[-1], main_out_logits[-1])
             out['enc_aux_outputs'] = self._set_aux_loss(enc_topk_logits_list, enc_topk_bboxes_list)
             out['pre_outputs'] = {'pred_logits': main_pre_logits, 'pred_boxes': main_pre_bboxes}
             out['enc_meta'] = {'class_agnostic': self.query_select_method == 'agnostic'}
