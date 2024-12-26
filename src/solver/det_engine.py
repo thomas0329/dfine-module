@@ -50,7 +50,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         global_step = epoch * len(data_loader) + i
         metas = dict(epoch=epoch, step=i, global_step=global_step, epoch_step=len(data_loader))
 
-        torch.use_deterministic_algorithms(True, warn_only=True)    # my modification
+        torch.use_deterministic_algorithms(True, warn_only=True)    # my modification. is this correct?
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
                 outputs, _ = model(samples, targets=targets)
@@ -96,10 +96,10 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             if max_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
-            optimizer.step()
+            optimizer.step()    # update model parameters
 
         if ema is not None:
-            ema.update(model)
+            ema.update(model)   # update model parameters
 
         if lr_warmup_scheduler is not None:
             lr_warmup_scheduler.step()
@@ -125,7 +125,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, 
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, model, ema
 
 
 @torch.no_grad()

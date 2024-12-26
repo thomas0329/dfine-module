@@ -811,7 +811,7 @@ class DFINETransformer(nn.Module):
         #     attn_mask=attn_mask,
         #     dn_meta=dn_meta, 
         #     aux=True)
-        # main_out_corners usable!
+        
         main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, main_d_ddetect = self.decoder(   # error
             init_ref_contents,
             init_ref_points_unact,
@@ -869,6 +869,7 @@ class DFINETransformer(nn.Module):
         # return out, dual_out
         
         return out, main_d_ddetect    
+        # dn_outputs
 
 
     @torch.jit.unused
