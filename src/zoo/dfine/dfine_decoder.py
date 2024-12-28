@@ -388,7 +388,6 @@ class TransformerDecoder(nn.Module):
             # pred_corners [1, 300, 132=33*4]
             
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)  # points, distances
-            print('inter_ref_bbox', inter_ref_bbox) # 0-1 during training, err
             if self.training or i == self.eval_idx: # 5
                 scores = score_head[i](output)
                 # Lqe does not affect the performance here.

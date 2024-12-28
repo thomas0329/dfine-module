@@ -46,10 +46,12 @@ class DFINEPostProcessor(nn.Module):
     def extra_repr(self) -> str:
         return f'use_focal_loss={self.use_focal_loss}, num_classes={self.num_classes}, num_top_queries={self.num_top_queries}'
 
-    # def forward(self, outputs, orig_target_sizes):
+    
     def forward(self, outputs, orig_target_sizes: torch.Tensor):
+        # outputs: a batch of raw predictions
         logits, boxes = outputs['pred_logits'], outputs['pred_boxes']
-        # orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
+        # logits torch.Size([64, 300, 80])  # there's batch info
+        # boxes torch.Size([64, 300, 4])
 
         bbox_pred = torchvision.ops.box_convert(boxes, in_fmt='cxcywh', out_fmt='xyxy')
         bbox_pred *= orig_target_sizes.repeat(1, 2).unsqueeze(1)
@@ -81,12 +83,20 @@ class DFINEPostProcessor(nn.Module):
             labels = torch.tensor([mscoco_label2category[int(x.item())] for x in labels.flatten()])\
                 .to(boxes.device).reshape(labels.shape)
 
-        results = []
-        for lab, box, sco in zip(labels, boxes, scores):
+        results = {'labels': labels, 'boxes': boxes, 'scores': scores}
+        return results
+        # labels torch.Size([64, 300])
+        # boxes torch.Size([64, 300, 4])
+        # scores torch.Size([64, 300])
+        for lab, box, sco in zip(labels, boxes, scores):    # class_label, bbox, class_conf
+            # box torch.Size([300, 4])  # xyxy
+            # sco torch.Size([300])
+            # lab torch.Size([300])
+            # print('sco', sco)
+            # print('lbl', lab)
             result = dict(labels=lab, boxes=box, scores=sco)
             results.append(result)
-
-        return results
+        return results  # a batch of results
 
 
     def deploy(self, ):
