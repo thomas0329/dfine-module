@@ -58,6 +58,7 @@ class DFINEPostProcessor(nn.Module):
 
         if self.use_focal_loss:
             scores = F.sigmoid(logits)
+            logits_sigged = scores
             scores, index = torch.topk(scores.flatten(1), self.num_top_queries, dim=-1)
             # TODO for older tensorrt
             # labels = index % self.num_classes
@@ -83,7 +84,7 @@ class DFINEPostProcessor(nn.Module):
             labels = torch.tensor([mscoco_label2category[int(x.item())] for x in labels.flatten()])\
                 .to(boxes.device).reshape(labels.shape)
 
-        results = {'labels': labels, 'boxes': boxes, 'scores': scores}
+        results = {'labels': labels, 'boxes': boxes, 'scores': scores, 'logits': logits_sigged}
         return results
         # labels torch.Size([64, 300])
         # boxes torch.Size([64, 300, 4])
