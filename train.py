@@ -37,7 +37,7 @@ def main(args, ) -> None:
     update_dict = yaml_utils.parse_cli(args.update)
     update_dict.update({k: v for k, v in args.__dict__.items() \
         if k not in ['update', ] and v is not None})
-
+    
     cfg = YAMLConfig(args.config, **update_dict)
     
     if args.resume or args.tuning:

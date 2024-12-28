@@ -78,6 +78,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             if max_norm > 0:    # true
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+
             # do I have to put the optimizer to device?
             scaler.step(optimizer)
             scaler.update()
@@ -125,7 +126,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, model, ema
+    # return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, model, ema
 
 
 @torch.no_grad()

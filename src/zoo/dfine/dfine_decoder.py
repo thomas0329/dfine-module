@@ -370,16 +370,15 @@ class TransformerDecoder(nn.Module):
                 value = self.value_op(memory, None, query_pos_embed.shape[-1], memory_mask, spatial_shapes)
                 output = F.interpolate(output, size=query_pos_embed.shape[-1])
                 output_detach = output.detach()
-            # print('output', output.shape)
+            
             output = layer(output, ref_points_input, value, spatial_shapes, attn_mask, query_pos_embed)
-            # print('output', output.shape)
+
+            # where's the part of computing dl from d0?
+            
             if i == 0 : # the output of the first layer is fed to pre_bbox_head.
                 # Initial bounding box predictions with inverse sigmoid refinement
-                # print('input to trad head', output) # nan
+                # xywh
                 dbox, d_ddetect = pre_bbox_head(output)
-                # print('dbox', dbox) # nan or all zero, why?
-                # dbox torch.Size([1, 4, 300])
-                # inverse_sigmoid(ref_points_detach) torch.Size([1, 300, 4])
                 pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
@@ -388,7 +387,8 @@ class TransformerDecoder(nn.Module):
             pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
             # pred_corners [1, 300, 132=33*4]
             
-            inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
+            inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)  # points, distances
+            print('inter_ref_bbox', inter_ref_bbox) # 0-1 during training, err
             if self.training or i == self.eval_idx: # 5
                 scores = score_head[i](output)
                 # Lqe does not affect the performance here.
@@ -406,7 +406,7 @@ class TransformerDecoder(nn.Module):
             ref_points_detach = inter_ref_bbox.detach()
             output_detach = output.detach()
         
-        # what's dec_out_logits?
+        
         return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
                torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_ddetect
         # what I need: predicted distribution: dec_out_pred_corners, class: dec_out_logits, bbox: dec_out_bboxes
@@ -765,10 +765,7 @@ class DFINETransformer(nn.Module):
         return topk_memory, topk_logits, topk_anchors
     
     def forward(self, feats, targets=None):
-        # feats len 6
-        # input channels [512, 512, 512, 256, 512, 512]
-        # aux_feats = feats[:3]
-        # main_feats = feats[3:]
+
         # input projection and embedding
         memory, spatial_shapes = self._get_encoder_input(feats, aux=True)
         # aux_memory, spatial_shapes = self._get_encoder_input(aux_feats, aux=True)
@@ -869,7 +866,7 @@ class DFINETransformer(nn.Module):
         # return out, dual_out
         
         return out, main_d_ddetect    
-        # dn_outputs
+        # the scale of pred_boxes looks wierd!
 
 
     @torch.jit.unused

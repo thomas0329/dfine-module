@@ -42,7 +42,7 @@ def weighting_function(reg_max, up, reg_scale, deploy=False):
         # print('right_values', len(right_values))
         # print('[upper_bound2]', len([upper_bound2]))
         # values = [-upper_bound2] + left_values + [torch.zeros_like(up[0][None])] + right_values + [upper_bound2]
-        values = [-upper_bound2] + left_values + right_values + [upper_bound2]
+        values = [-upper_bound2] + left_values + right_values + [upper_bound2]  # is this correct?
         # print('values', len(values))
         return torch.cat(values, 0)
         return values
