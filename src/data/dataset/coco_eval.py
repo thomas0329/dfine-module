@@ -33,6 +33,9 @@ class CocoEvaluator(object):
         self.img_ids = []
         self.eval_imgs = {k: [] for k in iou_types}
 
+    def setdevice(self, device):
+        self.device = device
+
     def cleanup(self):
         self.coco_eval = {}
         for iou_type in self.iou_types:

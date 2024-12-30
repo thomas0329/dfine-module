@@ -89,6 +89,8 @@ class DFINEPostProcessor(nn.Module):
         # labels torch.Size([64, 300])
         # boxes torch.Size([64, 300, 4])
         # scores torch.Size([64, 300])
+        
+        results = []
         for lab, box, sco in zip(labels, boxes, scores):    # class_label, bbox, class_conf
             # box torch.Size([300, 4])  # xyxy
             # sco torch.Size([300])

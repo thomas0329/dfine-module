@@ -147,8 +147,8 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
     for samples, targets in metric_logger.log_every(data_loader, 10, header):
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-
-        outputs = model(samples)
+        # samples are all ([128, 3, 640, 640])
+        outputs, _ = model(samples)
         # with torch.autocast(device_type=str(device)):
         #     outputs = model(samples)
 
@@ -174,7 +174,9 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
 
     # accumulate predictions from all images
     if coco_evaluator is not None:
+        print('accumulate')
         coco_evaluator.accumulate()
+        print('summarize')
         coco_evaluator.summarize()
 
     stats = {}

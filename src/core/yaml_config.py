@@ -160,6 +160,7 @@ class YAMLConfig(BaseConfig):
             bs = cfg.get('batch_size')
         else:
             from ..misc import dist_utils
+            print('total_batch_size', total_batch_size)
             assert total_batch_size % dist_utils.get_world_size() == 0, \
                 'total_batch_size should be divisible by world size'
             bs = total_batch_size // dist_utils.get_world_size()
