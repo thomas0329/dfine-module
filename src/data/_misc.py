@@ -50,7 +50,7 @@ def convert_to_tv_tensor(tensor: Tensor, key: str, box_format='xyxy', spatial_si
     if key == 'boxes':
         box_format = getattr(BoundingBoxFormat, box_format.upper())
         _kwargs = dict(zip(_boxes_keys, [box_format, spatial_size]))
-        return BoundingBoxes(tensor, **_kwargs)
+        return BoundingBoxes(tensor, **_kwargs) # xyxy
 
     if key == 'masks':
        return Mask(tensor)

@@ -57,7 +57,7 @@ class CocoDetection(torchvision.datasets.CocoDetection, DetDataset):
 
         target['idx'] = torch.tensor([idx])
 
-        if 'boxes' in target:
+        if 'boxes' in target:   # xyxy
             target['boxes'] = convert_to_tv_tensor(target['boxes'], key='boxes', spatial_size=image.size[::-1])
 
         if 'masks' in target:

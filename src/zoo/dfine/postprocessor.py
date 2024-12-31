@@ -47,14 +47,17 @@ class DFINEPostProcessor(nn.Module):
         return f'use_focal_loss={self.use_focal_loss}, num_classes={self.num_classes}, num_top_queries={self.num_top_queries}'
 
     
-    def forward(self, outputs, orig_target_sizes: torch.Tensor):
+    def forward(self, outputs, orig_target_sizes: torch.Tensor, return_logits=False):
         # outputs: a batch of raw predictions
         logits, boxes = outputs['pred_logits'], outputs['pred_boxes']
         # logits torch.Size([64, 300, 80])  # there's batch info
         # boxes torch.Size([64, 300, 4])
-
+        # should be in yolo format xywh. now: cxcywh, will it work?
+        
         bbox_pred = torchvision.ops.box_convert(boxes, in_fmt='cxcywh', out_fmt='xyxy')
         bbox_pred *= orig_target_sizes.repeat(1, 2).unsqueeze(1)
+
+        bbox_pred = torchvision.ops.box_convert(bbox_pred, in_fmt='xyxy', out_fmt='cxcywh')
 
         if self.use_focal_loss:
             scores = F.sigmoid(logits)
@@ -84,8 +87,9 @@ class DFINEPostProcessor(nn.Module):
             labels = torch.tensor([mscoco_label2category[int(x.item())] for x in labels.flatten()])\
                 .to(boxes.device).reshape(labels.shape)
 
-        results = {'labels': labels, 'boxes': boxes, 'scores': scores, 'logits': logits_sigged}
-        return results
+        if return_logits:
+            results = {'labels': labels, 'boxes': boxes, 'scores': scores, 'logits': logits_sigged}
+            return results
         # labels torch.Size([64, 300])
         # boxes torch.Size([64, 300, 4])
         # scores torch.Size([64, 300])

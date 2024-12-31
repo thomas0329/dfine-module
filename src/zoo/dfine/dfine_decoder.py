@@ -377,7 +377,8 @@ class TransformerDecoder(nn.Module):
             
             if i == 0 : # the output of the first layer is fed to pre_bbox_head.
                 # Initial bounding box predictions with inverse sigmoid refinement
-                # xywh
+                # what format should the output of trad head be in? [cx, cy, w, h]
+                # does ddetect output [cx, cy, w, h]?
                 dbox, d_ddetect = pre_bbox_head(output)
                 pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
@@ -386,8 +387,12 @@ class TransformerDecoder(nn.Module):
             # Refine bounding box corners using FDR, integrating previous layer's corrections
             pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
             # pred_corners [1, 300, 132=33*4]
+
+    
             
             inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)  # points, distances
+            # print('inter_ref_bbox', inter_ref_bbox) # [cx, cy, w, h]
+
             if self.training or i == self.eval_idx: # 5
                 scores = score_head[i](output)
                 # Lqe does not affect the performance here.
@@ -808,6 +813,7 @@ class DFINETransformer(nn.Module):
         #     dn_meta=dn_meta, 
         #     aux=True)
         
+        # [cx, cy, w, h]
         main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, main_d_ddetect = self.decoder(   # error
             init_ref_contents,
             init_ref_points_unact,
