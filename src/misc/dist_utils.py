@@ -210,6 +210,7 @@ def all_gather(data):
         list[data]: list of data gathered from each rank
     """
     world_size = get_world_size()
+
     if world_size == 1:
         return [data]
     data_list = [None] * world_size

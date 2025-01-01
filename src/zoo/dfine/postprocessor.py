@@ -59,10 +59,12 @@ class DFINEPostProcessor(nn.Module):
 
         bbox_pred = torchvision.ops.box_convert(bbox_pred, in_fmt='xyxy', out_fmt='cxcywh')
 
-        if self.use_focal_loss:
+        if self.use_focal_loss: # true
             scores = F.sigmoid(logits)
             logits_sigged = scores
+            # logits_sigged torch.Size([64, 300, 80])
             scores, index = torch.topk(scores.flatten(1), self.num_top_queries, dim=-1)
+            # scores torch.Size([64, 300])
             # TODO for older tensorrt
             # labels = index % self.num_classes
             labels = mod(index, self.num_classes)

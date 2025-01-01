@@ -379,7 +379,9 @@ class TransformerDecoder(nn.Module):
                 # Initial bounding box predictions with inverse sigmoid refinement
                 # what format should the output of trad head be in? [cx, cy, w, h]
                 # does ddetect output [cx, cy, w, h]?
-                dbox, d_ddetect = pre_bbox_head(output)
+                # print('pre_bbox_head', pre_bbox_head.device)
+                # assert False, output.device
+                dbox, d_ddetect = pre_bbox_head(output.to())
                 pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
@@ -776,6 +778,7 @@ class DFINETransformer(nn.Module):
         # main_memory, _ = self._get_encoder_input(main_feats ,aux=False)
         # print('spatial shapes', spatial_shapes) # [[32, 32], [16, 16], [8, 8]]
         # prepare denoising training
+        self.num_denoising = 0
         if self.training and self.num_denoising > 0:
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = \
                 get_contrastive_denoising_training_group(targets, \
@@ -841,17 +844,17 @@ class DFINETransformer(nn.Module):
             dn_out_logits, main_out_logits = torch.split(main_out_logits, dn_meta['dn_num_split'], dim=2)
             # refine main out corners! it already exists!
             dn_out_corners, main_out_corners = torch.split(main_out_corners, dn_meta['dn_num_split'], dim=2)
-            dn_out_refs, out_refs = torch.split(main_out_refs, dn_meta['dn_num_split'], dim=2)
+            dn_out_refs, main_out_refs = torch.split(main_out_refs, dn_meta['dn_num_split'], dim=2)
 
 
         if self.training:
             out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1], 'pred_corners': main_out_corners[-1],
-                   'ref_points': out_refs[-1], 'up': self.up, 'reg_scale': self.reg_scale}
+                   'ref_points': main_out_refs[-1], 'up': self.up, 'reg_scale': self.reg_scale}
         else:
             out = {'pred_logits': main_out_logits[-1], 'pred_boxes': main_out_bboxes[-1], 'pred_corners': main_out_corners[-1]}
 
         if self.training and self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss2(main_out_logits[:-1], main_out_bboxes[:-1], main_out_corners[:-1], out_refs[:-1],
+            out['aux_outputs'] = self._set_aux_loss2(main_out_logits[:-1], main_out_bboxes[:-1], main_out_corners[:-1], main_out_refs[:-1],
                                                      main_out_corners[-1], main_out_logits[-1])
             out['enc_aux_outputs'] = self._set_aux_loss(enc_topk_logits_list, enc_topk_bboxes_list)
             out['pre_outputs'] = {'pred_logits': main_pre_logits, 'pred_boxes': main_pre_bboxes}

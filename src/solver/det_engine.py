@@ -131,6 +131,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 @torch.no_grad()
 def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, data_loader, coco_evaluator: CocoEvaluator, device):
+    print('dfine eval')
     model.eval()
     criterion.eval()
     coco_evaluator.cleanup()
@@ -144,10 +145,16 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
     # coco_evaluator = CocoEvaluator(base_ds, iou_types)
     # coco_evaluator.coco_eval[iou_types[0]].params.iouThrs = [0, 0.1, 0.5, 0.75]
 
+    # TODO: write prediction.json from postprocessed results!
+
     for samples, targets in metric_logger.log_every(data_loader, 10, header):
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        # targets len 64
+        # print('target of one sample', targets[0]['image_id'])   # tensor([13291], device='cuda:0')
+        
         # samples are all ([128, 3, 640, 640])
+        # model.to(device)
         outputs, _ = model(samples)
         # with torch.autocast(device_type=str(device)):
         #     outputs = model(samples)
@@ -158,6 +165,11 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         # orig_target_sizes = torch.tensor([[samples.shape[-1], samples.shape[-2]]], device=samples.device)
 
         results = postprocessor(outputs, orig_target_sizes)
+        # results len 64
+        # a batch of results w each of them containing:
+            # box torch.Size([300, 4])  # xyxy
+            # sco torch.Size([300])
+            # lab torch.Size([300])
 
         # if 'segm' in postprocessor.keys():
         #     target_sizes = torch.stack([t["size"] for t in targets], dim=0)
