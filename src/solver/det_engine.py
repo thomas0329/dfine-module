@@ -126,7 +126,37 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
+    
+    torch.save(model.state_dict(), './my_save_ep=' + epoch + '.pt')
     # return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, model, ema
+
+from utils.general import xyxy2xywh, coco80_to_coco91_class
+from pathlib import Path
+
+def my_save_one_json(result, jdict, image_id, class_map):
+    # predn: each pred [84, 300]    # 4 + 80    (originally [84, 5292])
+    # Save one JSON result {"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}
+
+    # result = dict(labels=lab, boxes=box, scores=sco)
+    # result of each sample contains:
+        # box torch.Size([300, 4])  # xyxy
+        # sco torch.Size([300])
+        # lab torch.Size([300])
+
+    boxes = xyxy2xywh(result['boxes'])  # in: n, 4 boxes, out: cxcywh
+    boxes[:, :2] -= boxes[:, 2:] / 2  # xy center to top-left corner
+    for box, score, lbl in zip(boxes.tolist(), result['scores'].tolist(), result['labels'].tolist()):
+        jdict.append({
+            'image_id': image_id.item(),
+            'category_id': lbl,    # class map?
+            'bbox': [round(coord, 3) for coord in box],
+            'score': round(score, 5)})   # what's this? why is it always so low?
+
+def my_save_json(results, jdict, targets, class_map):
+    # results len 64
+    # targets len 64
+    for res, target in zip(results, targets):
+        my_save_one_json(res, jdict, target['image_id'], class_map)
 
 
 @torch.no_grad()
@@ -146,6 +176,8 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
     # coco_evaluator.coco_eval[iou_types[0]].params.iouThrs = [0, 0.1, 0.5, 0.75]
 
     # TODO: write prediction.json from postprocessed results!
+    jdict = []
+    class_map = coco80_to_coco91_class()
 
     for samples, targets in metric_logger.log_every(data_loader, 10, header):
         samples = samples.to(device)
@@ -165,6 +197,8 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         # orig_target_sizes = torch.tensor([[samples.shape[-1], samples.shape[-2]]], device=samples.device)
 
         results = postprocessor(outputs, orig_target_sizes)
+
+        my_save_json(results, jdict, targets, class_map)
         # results len 64
         # a batch of results w each of them containing:
             # box torch.Size([300, 4])  # xyxy
@@ -179,25 +213,25 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         if coco_evaluator is not None:
             coco_evaluator.update(res)
 
-    # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
-    if coco_evaluator is not None:
-        coco_evaluator.synchronize_between_processes()
+    # # gather the stats from all processes
+    # metric_logger.synchronize_between_processes()
+    # print("Averaged stats:", metric_logger)
+    # if coco_evaluator is not None:
+    #     coco_evaluator.synchronize_between_processes()
 
-    # accumulate predictions from all images
-    if coco_evaluator is not None:
-        print('accumulate')
-        coco_evaluator.accumulate()
-        print('summarize')
-        coco_evaluator.summarize()
+    # # accumulate predictions from all images
+    # if coco_evaluator is not None:
+    #     print('accumulate')
+    #     coco_evaluator.accumulate()
+    #     print('summarize')
+    #     coco_evaluator.summarize()
 
-    stats = {}
-    # stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-    if coco_evaluator is not None:
-        if 'bbox' in iou_types:
-            stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
-        if 'segm' in iou_types:
-            stats['coco_eval_masks'] = coco_evaluator.coco_eval['segm'].stats.tolist()
+    # stats = {}
+    # # stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    # if coco_evaluator is not None:
+    #     if 'bbox' in iou_types:
+    #         stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
+    #     if 'segm' in iou_types:
+    #         stats['coco_eval_masks'] = coco_evaluator.coco_eval['segm'].stats.tolist()
 
-    return stats, coco_evaluator
+    return coco_evaluator, jdict

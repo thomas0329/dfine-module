@@ -56,8 +56,7 @@ class DFINEPostProcessor(nn.Module):
         
         bbox_pred = torchvision.ops.box_convert(boxes, in_fmt='cxcywh', out_fmt='xyxy')
         bbox_pred *= orig_target_sizes.repeat(1, 2).unsqueeze(1)
-
-        bbox_pred = torchvision.ops.box_convert(bbox_pred, in_fmt='xyxy', out_fmt='cxcywh')
+        # xyxy
 
         if self.use_focal_loss: # true
             scores = F.sigmoid(logits)
@@ -85,13 +84,14 @@ class DFINEPostProcessor(nn.Module):
 
         # TODO
         if self.remap_mscoco_category:
+            
             from ...data.dataset import mscoco_label2category
             labels = torch.tensor([mscoco_label2category[int(x.item())] for x in labels.flatten()])\
                 .to(boxes.device).reshape(labels.shape)
 
-        if return_logits:
-            results = {'labels': labels, 'boxes': boxes, 'scores': scores, 'logits': logits_sigged}
-            return results
+        # if return_logits:
+        #     results = {'labels': labels, 'boxes': boxes, 'scores': scores, 'logits': logits_sigged}
+        #     return results
         # labels torch.Size([64, 300])
         # boxes torch.Size([64, 300, 4])
         # scores torch.Size([64, 300])
