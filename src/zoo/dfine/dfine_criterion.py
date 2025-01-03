@@ -22,6 +22,8 @@ from ...core import register
 
 @register()
 class DFINECriterion(nn.Module):
+    # does it compute class loss?
+    # check the initial weights of the head!
     """ This class computes the loss for D-FINE.
     """
     __share__ = ['num_classes', ]
@@ -34,7 +36,7 @@ class DFINECriterion(nn.Module):
         alpha=0.2,
         gamma=2.0,
         num_classes=80,
-        reg_max=32,
+        reg_max=16,
         boxes_weight_format=None,
         share_matched_indices=False):
         """Create the criterion.
@@ -132,14 +134,15 @@ class DFINECriterion(nn.Module):
             idx = self._get_src_permutation_idx(indices)
             target_boxes = torch.cat([t['boxes'][i] for t, (_, i) in zip(targets, indices)], dim=0)
 
-            pred_corners = outputs['pred_corners'][idx].reshape(-1, (self.reg_max))
+            pred_corners = outputs['pred_corners'][idx].reshape(-1, (self.reg_max+1))
+
             ref_points = outputs['ref_points'][idx].detach()
             with torch.no_grad():
                 if self.fgl_targets_dn is None and 'is_dn' in outputs:
                         self.fgl_targets_dn= bbox2distance(ref_points, box_cxcywh_to_xyxy(target_boxes),
                                                         self.reg_max, outputs['reg_scale'], outputs['up'])
                 if self.fgl_targets is None and 'is_dn' not in outputs:
-                        self.fgl_targets = bbox2distance(ref_points, box_cxcywh_to_xyxy(target_boxes),
+                        self.fgl_targets = bbox2distance(ref_points, box_cxcywh_to_xyxy(target_boxes),  # err
                                                         self.reg_max, outputs['reg_scale'], outputs['up'])
 
             target_corners, weight_right, weight_left = self.fgl_targets_dn if 'is_dn' in outputs else self.fgl_targets
@@ -152,8 +155,8 @@ class DFINECriterion(nn.Module):
                 pred_corners, target_corners, weight_right, weight_left, weight_targets, avg_factor=num_boxes)
 
             if 'teacher_corners' in outputs:
-                pred_corners = outputs['pred_corners'].reshape(-1, (self.reg_max))
-                target_corners = outputs['teacher_corners'].reshape(-1, (self.reg_max))
+                pred_corners = outputs['pred_corners'].reshape(-1, (self.reg_max+1))
+                target_corners = outputs['teacher_corners'].reshape(-1, (self.reg_max+1))
                 if torch.equal(pred_corners, target_corners):
                     losses['loss_ddf'] = pred_corners.sum() * 0
                 else:
@@ -273,6 +276,7 @@ class DFINECriterion(nn.Module):
         # Compute all the requested losses
         losses = {}
         for loss in self.losses:
+
             indices_in = indices_go if loss in ['boxes', 'local'] else indices
             num_boxes_in = num_boxes_go if loss in ['boxes', 'local'] else num_boxes
             meta = self.get_loss_meta_info(loss, outputs, targets, indices_in)

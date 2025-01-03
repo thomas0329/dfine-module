@@ -41,11 +41,10 @@ def weighting_function(reg_max, up, reg_scale, deploy=False):
         # print('[torch.zeros_like(up[0][None])]', len([torch.zeros_like(up[0][None])]))
         # print('right_values', len(right_values))
         # print('[upper_bound2]', len([upper_bound2]))
-        # values = [-upper_bound2] + left_values + [torch.zeros_like(up[0][None])] + right_values + [upper_bound2]
-        values = [-upper_bound2] + left_values + right_values + [upper_bound2]  # is this correct?
-        # print('values', len(values))
+        
+        values = [-upper_bound2] + left_values + [torch.zeros_like(up[0][None])] + right_values + [upper_bound2]
+        
         return torch.cat(values, 0)
-        return values
 
 
 def translate_gt(gt, reg_max, reg_scale, up):
@@ -88,7 +87,7 @@ def translate_gt(gt, reg_max, reg_scale, up):
 
     # Obtain distances
     left_values = function_values[valid_indices]
-    right_values = function_values[valid_indices + 1]
+    right_values = function_values[valid_indices + 1]   # err
 
     left_diffs = torch.abs(gt[valid_idx_mask] - left_values)
     right_diffs = torch.abs(right_values - gt[valid_idx_mask])

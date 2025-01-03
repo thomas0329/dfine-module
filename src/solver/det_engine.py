@@ -86,7 +86,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         else:   # no scalar
             
-            outputs, _ = model(samples, targets=targets)
+            outputs = model(samples, targets=targets)
             # out, dual_out
             loss_dict = criterion(outputs, targets, **metas)
 
@@ -127,7 +127,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
     
-    torch.save(model.state_dict(), './my_save_ep=' + epoch + '.pt')
+    torch.save(model.state_dict(), './my_save_ep=' + str(epoch) + '.pt')
     # return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, model, ema
 
 from utils.general import xyxy2xywh, coco80_to_coco91_class

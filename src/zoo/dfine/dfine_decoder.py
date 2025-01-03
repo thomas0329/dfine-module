@@ -258,15 +258,14 @@ class Integral(nn.Module):  # pred_corners: distribution
                        It can be adjusted based on the dataset or task requirements.
     """
 
-    def __init__(self, reg_max=32):
+    def __init__(self, reg_max=16):
         super(Integral, self).__init__()
         self.reg_max = reg_max
 
     def forward(self, x, project):
         shape = x.shape
-        # x = F.softmax(x.reshape(-1, self.reg_max + 1), dim=1)
-        x = F.softmax(x.reshape(-1, self.reg_max), dim=1)
-        x = F.linear(x, project.to(x.device)).reshape(-1, 4)
+        x = F.softmax(x.reshape(-1, self.reg_max + 1), dim=1)
+        x = F.linear(x, project.to(x.device)).reshape(-1, 4)    # size mismatch, got input (9600), mat (9600x17), vec (16)
         return x.reshape(list(shape[:-1]) + [-1])
 
 
@@ -281,8 +280,7 @@ class LQE(nn.Module):
 
     def forward(self, scores, pred_corners):
         B, L, _ = pred_corners.size()
-        # prob = F.softmax(pred_corners.reshape(B, L, 4, self.reg_max+1), dim=-1)
-        prob = F.softmax(pred_corners.reshape(B, L, 4, self.reg_max), dim=-1)
+        prob = F.softmax(pred_corners.reshape(B, L, 4, self.reg_max+1), dim=-1)
         prob_topk, _ = prob.topk(self.k, dim=-1)
         stat = torch.cat([prob_topk, prob_topk.mean(dim=-1, keepdim=True)], dim=-1)
         quality_score = self.reg_conf(stat.reshape(B, L, -1))
@@ -381,7 +379,7 @@ class TransformerDecoder(nn.Module):
                 # does ddetect output [cx, cy, w, h]?
                 # print('pre_bbox_head', pre_bbox_head.device)
                 # assert False, output.device
-                dbox, d_ddetect = pre_bbox_head(output.to())
+                dbox = pre_bbox_head(output)
                 pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
@@ -414,7 +412,8 @@ class TransformerDecoder(nn.Module):
         
         
         return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_ddetect
+               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores
+        # append d_ddetect at the end
         # what I need: predicted distribution: dec_out_pred_corners, class: dec_out_logits, bbox: dec_out_bboxes
         # their shape:                 [1, 300, 132],  [1, 300, 80]  , [1, 300, 4]
         # shape required by yolo loss: [16, 8400, 64], [16, 8400, 80], [16, 8400, 4]
@@ -450,7 +449,7 @@ class DFINETransformer(nn.Module):
                  aux_loss=True,
                  cross_attn_method='default',
                  query_select_method='default',
-                 reg_max=32,
+                 reg_max=16,
                  reg_scale=4.,
                  layer_scale=1):
         super().__init__()
@@ -536,10 +535,8 @@ class DFINETransformer(nn.Module):
           + [nn.Linear(scaled_dim, num_classes) for _ in range(num_layers - self.eval_idx - 1)])
         self.pre_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3)  # does not output class info?
         self.dec_bbox_head = nn.ModuleList( # for producing distribution
-        #     [MLP(hidden_dim, hidden_dim, 4 * (self.reg_max+1), 3) for _ in range(self.eval_idx + 1)]
-        #   + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max+1), 3) for _ in range(num_layers - self.eval_idx - 1)])
-            [MLP(hidden_dim, hidden_dim, 4 * (self.reg_max), 3) for _ in range(self.eval_idx + 1)]
-          + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max), 3) for _ in range(num_layers - self.eval_idx - 1)])
+            [MLP(hidden_dim, hidden_dim, 4 * (self.reg_max+1), 3) for _ in range(self.eval_idx + 1)]
+          + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max+1), 3) for _ in range(num_layers - self.eval_idx - 1)])
         self.integral = Integral(self.reg_max)
 
         # init encoder output anchors and valid_mask
@@ -817,7 +814,7 @@ class DFINETransformer(nn.Module):
         #     aux=True)
         
         # [cx, cy, w, h]
-        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, main_d_ddetect = self.decoder(   # error
+        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits = self.decoder(   # error
             init_ref_contents,
             init_ref_points_unact,
             memory,
@@ -873,7 +870,7 @@ class DFINETransformer(nn.Module):
 
         # return out, dual_out
         
-        return out, main_d_ddetect    
+        return out    
         # the scale of pred_boxes looks wierd!
 
 
