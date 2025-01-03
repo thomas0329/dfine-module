@@ -152,7 +152,7 @@ def my_save_one_json(result, jdict, image_id, class_map):
             'bbox': [round(coord, 3) for coord in box],
             'score': round(score, 5)})   # what's this? why is it always so low?
 
-def my_save_json(results, jdict, targets, class_map):
+def my_save_json(results, jdict, targets, class_map=None):
     # results len 64
     # targets len 64
     for res, target in zip(results, targets):
