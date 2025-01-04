@@ -146,7 +146,6 @@ def my_save_one_json(result, jdict, image_id, class_map):
     boxes = xyxy2xywh(result['boxes'])  # in: n, 4 boxes, out: cxcywh
     boxes[:, :2] -= boxes[:, 2:] / 2  # xy center to top-left corner
     for box, score, lbl in zip(boxes.tolist(), result['scores'].tolist(), result['labels'].tolist()):
-        print('box saved', box)
         jdict.append({
             'image_id': image_id.item(),
             'category_id': lbl,    # class map?

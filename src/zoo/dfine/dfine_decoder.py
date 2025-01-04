@@ -378,7 +378,7 @@ class TransformerDecoder(nn.Module):
                 # what format should the output of trad head be in? [cx, cy, w, h]
                 # does ddetect output [cx, cy, w, h]?
                 # print('pre_bbox_head', pre_bbox_head.device)
-                # assert False, output.device
+                
                 dbox = pre_bbox_head(output)
                 pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
@@ -775,7 +775,7 @@ class DFINETransformer(nn.Module):
         # main_memory, _ = self._get_encoder_input(main_feats ,aux=False)
         # print('spatial shapes', spatial_shapes) # [[32, 32], [16, 16], [8, 8]]
         # prepare denoising training
-        self.num_denoising = 0
+        
         if self.training and self.num_denoising > 0:
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = \
                 get_contrastive_denoising_training_group(targets, \
