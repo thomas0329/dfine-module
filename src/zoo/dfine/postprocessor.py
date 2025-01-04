@@ -46,24 +46,17 @@ class DFINEPostProcessor(nn.Module):
     def extra_repr(self) -> str:
         return f'use_focal_loss={self.use_focal_loss}, num_classes={self.num_classes}, num_top_queries={self.num_top_queries}'
 
-    
-    def forward(self, outputs, orig_target_sizes: torch.Tensor, return_logits=False):
-        # outputs: a batch of raw predictions
+    # def forward(self, outputs, orig_target_sizes):
+    def forward(self, outputs, orig_target_sizes: torch.Tensor):
         logits, boxes = outputs['pred_logits'], outputs['pred_boxes']
-        # logits torch.Size([64, 300, 80])  # there's batch info
-        # boxes torch.Size([64, 300, 4])
-        # should be in yolo format xywh. now: cxcywh, will it work?
-        
+        # orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
+
         bbox_pred = torchvision.ops.box_convert(boxes, in_fmt='cxcywh', out_fmt='xyxy')
         bbox_pred *= orig_target_sizes.repeat(1, 2).unsqueeze(1)
-        # xyxy
 
-        if self.use_focal_loss: # true
+        if self.use_focal_loss:
             scores = F.sigmoid(logits)
-            logits_sigged = scores
-            # logits_sigged torch.Size([64, 300, 80])
             scores, index = torch.topk(scores.flatten(1), self.num_top_queries, dim=-1)
-            # scores torch.Size([64, 300])
             # TODO for older tensorrt
             # labels = index % self.num_classes
             labels = mod(index, self.num_classes)
@@ -84,28 +77,16 @@ class DFINEPostProcessor(nn.Module):
 
         # TODO
         if self.remap_mscoco_category:
-            
             from ...data.dataset import mscoco_label2category
             labels = torch.tensor([mscoco_label2category[int(x.item())] for x in labels.flatten()])\
                 .to(boxes.device).reshape(labels.shape)
 
-        # if return_logits:
-        #     results = {'labels': labels, 'boxes': boxes, 'scores': scores, 'logits': logits_sigged}
-        #     return results
-        # labels torch.Size([64, 300])
-        # boxes torch.Size([64, 300, 4])
-        # scores torch.Size([64, 300])
-        
         results = []
-        for lab, box, sco in zip(labels, boxes, scores):    # class_label, bbox, class_conf
-            # box torch.Size([300, 4])  # xyxy
-            # sco torch.Size([300])
-            # lab torch.Size([300])
-            # print('sco', sco)
-            # print('lbl', lab)
+        for lab, box, sco in zip(labels, boxes, scores):
             result = dict(labels=lab, boxes=box, scores=sco)
             results.append(result)
-        return results  # a batch of results
+
+        return results
 
 
     def deploy(self, ):
