@@ -36,7 +36,7 @@ class DFINECriterion(nn.Module):
         alpha=0.2,
         gamma=2.0,
         num_classes=80,
-        reg_max=16,
+        reg_max=32,
         boxes_weight_format=None,
         share_matched_indices=False):
         """Create the criterion.

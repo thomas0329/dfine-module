@@ -3,7 +3,7 @@ use_ema: True
 ema:
   type: ModelEMA
   decay: 0.9999
-  warmups: 1000
+  warmups: 2000
   start: 0
 
 
@@ -15,13 +15,15 @@ optimizer:
   type: AdamW
   params:
     -
+      # including backbone, but not norm
       params: '^(?=.*backbone)(?!.*norm).*$'
-      lr: 0.0000125
+      lr: 0.0000063 # Backbone LR
     -
+      # ^(?=.*A)(?=.*B).*$ including a and b
       params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn)).*$'
       weight_decay: 0.
 
-  lr: 0.00025
+  lr: 0.000125  # Base LR 
   betas: [0.9, 0.999]
   weight_decay: 0.000125
 
@@ -33,4 +35,4 @@ lr_scheduler:
 
 lr_warmup_scheduler:
   type: LinearWarmup
-  warmup_duration: 500
+  warmup_duration: 1000

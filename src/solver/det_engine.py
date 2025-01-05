@@ -50,6 +50,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         global_step = epoch * len(data_loader) + i
         metas = dict(epoch=epoch, step=i, global_step=global_step, epoch_step=len(data_loader))
 
+        # half = model.fp16  # FP16 supported on limited backends with CUDA
+        samples = samples.float()
+        # samples = samples.half() if half else samples.float()  # uint8 to fp16/32
+        samples /= 255  # 0 - 255 to 0.0 - 1.0
+
         torch.use_deterministic_algorithms(True, warn_only=True)    # my modification. is this correct?
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
@@ -184,6 +189,10 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         # targets len 64
         # print('target of one sample', targets[0]['image_id'])   # tensor([13291], device='cuda:0')
+        # half = model.fp16  # FP16 supported on limited backends with CUDA
+        samples = samples.float()
+        # samples = samples.half() if half else samples.float()  # uint8 to fp16/32
+        samples /= 255  # 0 - 255 to 0.0 - 1.0
         
         # samples are all ([128, 3, 640, 640])
         # model.to(device)

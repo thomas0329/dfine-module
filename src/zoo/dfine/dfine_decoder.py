@@ -258,7 +258,7 @@ class Integral(nn.Module):  # pred_corners: distribution
                        It can be adjusted based on the dataset or task requirements.
     """
 
-    def __init__(self, reg_max=16):
+    def __init__(self, reg_max=32):
         super(Integral, self).__init__()
         self.reg_max = reg_max
 
@@ -449,7 +449,7 @@ class DFINETransformer(nn.Module):
                  aux_loss=True,
                  cross_attn_method='default',
                  query_select_method='default',
-                 reg_max=16,
+                 reg_max=32,
                  reg_scale=4.,
                  layer_scale=1):
         super().__init__()
