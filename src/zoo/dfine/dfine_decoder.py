@@ -378,8 +378,8 @@ class TransformerDecoder(nn.Module):
                 # what format should the output of trad head be in? [cx, cy, w, h]
                 # does ddetect output [cx, cy, w, h]?
                 # print('pre_bbox_head', pre_bbox_head.device)
-                
-                dbox = pre_bbox_head(output)
+                # dbox should be cx cy w h
+                dbox, d_ddetect = pre_bbox_head(output)
                 pre_bboxes = F.sigmoid(dbox + inverse_sigmoid(ref_points_detach))
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
@@ -412,7 +412,7 @@ class TransformerDecoder(nn.Module):
         
         
         return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores
+               torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), pre_bboxes, pre_scores, d_ddetect
         # append d_ddetect at the end
         # what I need: predicted distribution: dec_out_pred_corners, class: dec_out_logits, bbox: dec_out_bboxes
         # their shape:                 [1, 300, 132],  [1, 300, 80]  , [1, 300, 4]
@@ -776,6 +776,7 @@ class DFINETransformer(nn.Module):
         # print('spatial shapes', spatial_shapes) # [[32, 32], [16, 16], [8, 8]]
         # prepare denoising training
         
+        self.num_denoising = 0
         if self.training and self.num_denoising > 0:
             denoising_logits, denoising_bbox_unact, attn_mask, dn_meta = \
                 get_contrastive_denoising_training_group(targets, \
@@ -814,7 +815,7 @@ class DFINETransformer(nn.Module):
         #     aux=True)
         
         # [cx, cy, w, h]
-        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits = self.decoder(   # error
+        main_out_bboxes, main_out_logits, main_out_corners, main_out_refs, main_pre_bboxes, main_pre_logits, d_ddetect = self.decoder(   # error
             init_ref_contents,
             init_ref_points_unact,
             memory,
@@ -870,7 +871,7 @@ class DFINETransformer(nn.Module):
 
         # return out, dual_out
         
-        return out    
+        return out, d_ddetect
         # the scale of pred_boxes looks wierd!
 
 
