@@ -58,7 +58,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         torch.use_deterministic_algorithms(True, warn_only=True)    # my modification. is this correct?
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
-                outputs, _ = model(samples, targets=targets)
+                outputs = model(samples, targets=targets)
                 # out, dual_out
 
             if torch.isnan(outputs['pred_boxes']).any() or torch.isinf(outputs['pred_boxes']).any():
@@ -91,7 +91,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         else:   # no scalar
             
-            outputs, _ = model(samples, targets=targets)
+            outputs = model(samples, targets=targets)
             # out, dual_out
             loss_dict = criterion(outputs, targets, **metas)
 
@@ -196,7 +196,7 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         
         # samples are all ([128, 3, 640, 640])
         # model.to(device)
-        outputs, _ = model(samples)
+        outputs = model(samples)
         # with torch.autocast(device_type=str(device)):
         #     outputs = model(samples)
 
